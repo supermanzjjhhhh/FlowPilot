@@ -148,6 +148,21 @@ test('sidepanel html exposes phone verification toggle and multi-provider SMS ro
   assert.doesNotMatch(html, /id="input-account-run-history-text-enabled"/);
 });
 
+test('sidepanel loads SMS country lists silently during startup fallback', () => {
+  const heroLoader = extractFunction('loadHeroSmsCountries');
+  const fiveSimLoader = extractFunction('loadFiveSimCountries');
+
+  assert.match(heroLoader, /async function loadHeroSmsCountries\(options = \{\}\)/);
+  assert.match(fiveSimLoader, /async function loadFiveSimCountries\(options = \{\}\)/);
+  assert.match(heroLoader, /const preferFallbackOnly = Boolean\(options\?\.preferFallbackOnly\)/);
+  assert.match(fiveSimLoader, /const preferFallbackOnly = Boolean\(options\?\.preferFallbackOnly\)/);
+  assert.doesNotMatch(heroLoader, /console\.(?:warn|error)\('加载 (?:5sim|HeroSMS) 国家列表失败：'/);
+  assert.doesNotMatch(fiveSimLoader, /console\.(?:warn|error)\('加载 5sim 国家列表失败：'/);
+  assert.match(sidepanelSource, /loadHeroSmsCountries\(\{ silent: true, preferFallbackOnly: true \}\)/);
+  assert.match(sidepanelSource, /loadFiveSimCountries\(\{ silent: true, preferFallbackOnly: true \}\)/);
+  assert.doesNotMatch(sidepanelSource, /console\.error\('加载 (?:HeroSMS|5sim|NexSMS) 国家列表失败：'/);
+});
+
 test('sidepanel source wires free reusable phone save and clear actions to runtime messages', () => {
   assert.match(sidepanelSource, /const inputFreePhoneReuseEnabled = document\.getElementById\('input-free-phone-reuse-enabled'\);/);
   assert.match(sidepanelSource, /const inputFreePhoneReuseAutoEnabled = document\.getElementById\('input-free-phone-reuse-auto-enabled'\);/);

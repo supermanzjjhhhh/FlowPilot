@@ -6595,11 +6595,13 @@ async function refreshFreeReusablePhoneStateFallback(mutationResult = {}, option
   }
 }
 
-async function loadHeroSmsCountries() {
+async function loadHeroSmsCountries(options = {}) {
   const countrySelect = selectHeroSmsCountry || selectHeroSmsCountryFallback;
   if (!countrySelect) {
     return;
   }
+  const silent = Boolean(options?.silent);
+  const preferFallbackOnly = Boolean(options?.preferFallbackOnly);
 
   const provider = getSelectedPhoneSmsProvider();
   const previousSelectionOrder = [...heroSmsCountrySelectionOrder];
@@ -6622,8 +6624,47 @@ async function loadHeroSmsCountries() {
       selectEl.appendChild(option);
     });
   };
+  const applyFiveSimFallbackOptions = () => {
+    const fallbackItems = FIVE_SIM_SUPPORTED_COUNTRY_ITEMS.map((item) => ({
+      id: item.id,
+      label: formatFiveSimCountryDisplayLabel(item.id, item.eng),
+      searchText: item.searchText,
+    }));
+    applyOptions(fallbackItems, selectHeroSmsCountry);
+    applyOptions(fallbackItems, selectHeroSmsCountryFallback);
+    heroSmsCountrySearchTextById.clear();
+    fallbackItems.forEach((entry) => heroSmsCountrySearchTextById.set(String(entry.id), entry.searchText));
+  };
+  const applyHeroSmsFallbackOptions = () => {
+    const fallbackItems = HERO_SMS_FALLBACK_COUNTRY_ITEMS
+      .map((item) => {
+        const id = normalizeHeroSmsCountryId(item.id);
+        const label = buildHeroSmsCountryDisplayLabel(item);
+        return {
+          id,
+          label: String(label || '').trim() || `Country #${id}`,
+          searchText: buildHeroSmsCountrySearchText(item, label, String(id)),
+        };
+      })
+      .filter((item) => item.id > 0);
+    if (!fallbackItems.some((item) => item.id === DEFAULT_HERO_SMS_COUNTRY_ID)) {
+      fallbackItems.unshift({
+        id: DEFAULT_HERO_SMS_COUNTRY_ID,
+        label: DEFAULT_HERO_SMS_COUNTRY_LABEL,
+        searchText: `${DEFAULT_HERO_SMS_COUNTRY_LABEL} ${DEFAULT_HERO_SMS_COUNTRY_ID}`,
+      });
+    }
+    applyOptions(fallbackItems, selectHeroSmsCountry);
+    applyOptions(fallbackItems, selectHeroSmsCountryFallback);
+    heroSmsCountrySearchTextById.clear();
+    fallbackItems.forEach((entry) => {
+      heroSmsCountrySearchTextById.set(String(entry.id), entry.searchText);
+    });
+  };
 
-  if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+  if (provider === PHONE_SMS_PROVIDER_FIVE_SIM && preferFallbackOnly) {
+    applyFiveSimFallbackOptions();
+  } else if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -6665,20 +6706,13 @@ async function loadHeroSmsCountries() {
       applyOptions(optionItems, selectHeroSmsCountry);
       applyOptions(optionItems, selectHeroSmsCountryFallback);
     } catch (error) {
-      console.warn('加载 5sim 国家列表失败：', error);
-      const fallbackItems = FIVE_SIM_SUPPORTED_COUNTRY_ITEMS.map((item) => ({
-        id: item.id,
-        label: formatFiveSimCountryDisplayLabel(item.id, item.eng),
-        searchText: item.searchText,
-      }));
-      applyOptions(fallbackItems, selectHeroSmsCountry);
-      applyOptions(fallbackItems, selectHeroSmsCountryFallback);
-      heroSmsCountrySearchTextById.clear();
-      fallbackItems.forEach((entry) => heroSmsCountrySearchTextById.set(String(entry.id), entry.searchText));
-      if (typeof showToast === 'function') {
+      applyFiveSimFallbackOptions();
+      if (!silent && typeof showToast === 'function') {
         showToast(`5sim 国家列表加载失败：${normalizeHeroSmsFetchErrorMessage(error)}（已切换为内置国家列表）`, 'warn', 2800);
       }
     }
+  } else if (preferFallbackOnly) {
+    applyHeroSmsFallbackOptions();
   } else try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -6717,32 +6751,8 @@ async function loadHeroSmsCountries() {
     applyOptions(optionItems, selectHeroSmsCountry);
     applyOptions(optionItems, selectHeroSmsCountryFallback);
   } catch (error) {
-    console.warn('加载 HeroSMS 国家列表失败：', error);
-    const fallbackItems = HERO_SMS_FALLBACK_COUNTRY_ITEMS
-      .map((item) => {
-        const id = normalizeHeroSmsCountryId(item.id);
-        const label = buildHeroSmsCountryDisplayLabel(item);
-        return {
-          id,
-          label: String(label || '').trim() || `Country #${id}`,
-          searchText: buildHeroSmsCountrySearchText(item, label, String(id)),
-        };
-      })
-      .filter((item) => item.id > 0);
-    if (!fallbackItems.some((item) => item.id === DEFAULT_HERO_SMS_COUNTRY_ID)) {
-      fallbackItems.unshift({
-        id: DEFAULT_HERO_SMS_COUNTRY_ID,
-        label: DEFAULT_HERO_SMS_COUNTRY_LABEL,
-        searchText: `${DEFAULT_HERO_SMS_COUNTRY_LABEL} ${DEFAULT_HERO_SMS_COUNTRY_ID}`,
-      });
-    }
-    applyOptions(fallbackItems, selectHeroSmsCountry);
-    applyOptions(fallbackItems, selectHeroSmsCountryFallback);
-    heroSmsCountrySearchTextById.clear();
-    fallbackItems.forEach((entry) => {
-      heroSmsCountrySearchTextById.set(String(entry.id), entry.searchText);
-    });
-    if (typeof showToast === 'function') {
+    applyHeroSmsFallbackOptions();
+    if (!silent && typeof showToast === 'function') {
       showToast(`国家列表加载失败：${normalizeHeroSmsFetchErrorMessage(error)}（已切换为内置国家列表）`, 'warn', 2800);
     }
   }
@@ -7043,10 +7053,12 @@ function removeFiveSimCountryFromOrder(code = '') {
   return nextOrder;
 }
 
-async function loadFiveSimCountries() {
+async function loadFiveSimCountries(options = {}) {
   if (!selectFiveSimCountry) {
     return;
   }
+  const silent = Boolean(options?.silent);
+  const preferFallbackOnly = Boolean(options?.preferFallbackOnly);
   const previousOrder = [...fiveSimCountrySelectionOrder];
   const applyOptions = (items = []) => {
     selectFiveSimCountry.innerHTML = '';
@@ -7070,7 +7082,9 @@ async function loadFiveSimCountries() {
     searchText: item.searchText,
   }));
 
-  try {
+  if (preferFallbackOnly) {
+    applyOptions(fallbackItems);
+  } else try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     const response = await fetch('https://5sim.net/v1/guest/countries', {
@@ -7086,8 +7100,10 @@ async function loadFiveSimCountries() {
     const items = parseFiveSimCountriesPayload(payload);
     applyOptions(items.length ? items : fallbackItems);
   } catch (error) {
-    console.warn('加载 5sim 国家列表失败：', error);
     applyOptions(fallbackItems);
+    if (!silent && typeof showToast === 'function') {
+      showToast(`5sim 国家列表加载失败：${normalizeHeroSmsFetchErrorMessage(error)}（已切换为内置国家列表）`, 'warn', 2800);
+    }
   }
 
   applyFiveSimCountrySelection(previousOrder.length ? previousOrder : latestState?.fiveSimCountryOrder || [], {
@@ -9843,10 +9859,11 @@ function applySettingsState(state) {
     return Math.max(1, Math.min(1440, numeric));
   };
   syncLatestState(state);
+  const defaultActiveFlowId = typeof DEFAULT_ACTIVE_FLOW_ID === 'string' ? DEFAULT_ACTIVE_FLOW_ID : 'openai';
   const appliedFlowSelection = typeof syncFlowSelectorsFromState === 'function'
     ? syncFlowSelectorsFromState(state)
     : {
-      activeFlowId: String(state?.activeFlowId || state?.flowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID,
+      activeFlowId: String(state?.activeFlowId || state?.flowId || defaultActiveFlowId).trim().toLowerCase() || defaultActiveFlowId,
       sourceId: String(state?.panelMode || 'cpa').trim().toLowerCase() || 'cpa',
     };
   if (typeof applyOperationDelayState === 'function') {
@@ -10071,7 +10088,7 @@ function applySettingsState(state) {
   if (typeof updateIpProxyUI === 'function') {
     updateIpProxyUI(latestState);
   }
-  if (selectFlow) {
+  if (typeof selectFlow !== 'undefined' && selectFlow) {
     selectFlow.value = appliedFlowSelection.activeFlowId;
   }
   if (selectPanelMode && appliedFlowSelection.sourceId) {
@@ -10222,9 +10239,7 @@ function applySettingsState(state) {
   updatePhoneSmsProviderOrderSummary(restoredPhoneSmsProviderOrder);
   if (previousPhoneSmsProvider !== restoredPhoneSmsProvider) {
     heroSmsCountrySelectionOrder = [];
-    loadHeroSmsCountries().catch((error) => {
-      console.warn('恢复接码平台后重新加载国家列表失败：', error);
-    });
+    loadHeroSmsCountries({ silent: true, preferFallbackOnly: true }).catch(() => { });
   }
   if (inputHeroSmsApiKey) {
     inputHeroSmsApiKey.value = restoredPhoneSmsProvider === PHONE_SMS_PROVIDER_FIVE_SIM
@@ -16612,21 +16627,21 @@ initializeReleaseInfo().catch((err) => {
   console.error('Failed to initialize release info:', err);
 });
 Promise.allSettled([
-  loadHeroSmsCountries(),
-  loadFiveSimCountries(),
-  loadNexSmsCountries({ silent: true }),
+  loadHeroSmsCountries({ silent: true, preferFallbackOnly: true }),
+  loadFiveSimCountries({ silent: true, preferFallbackOnly: true }),
+  loadNexSmsCountries(),
 ]).then((results) => {
   const heroResult = results[0];
   const fiveSimResult = results[1];
   const nexSmsResult = results[2];
   if (heroResult?.status === 'rejected') {
-    console.error('加载 HeroSMS 国家列表失败：', heroResult.reason);
+    console.debug('HeroSMS country list startup fallback skipped:', heroResult.reason);
   }
   if (fiveSimResult?.status === 'rejected') {
-    console.error('加载 5sim 国家列表失败：', fiveSimResult.reason);
+    console.debug('5sim country list startup fallback skipped:', fiveSimResult.reason);
   }
   if (nexSmsResult?.status === 'rejected') {
-    console.error('加载 NexSMS 国家列表失败：', nexSmsResult.reason);
+    console.debug('NexSMS country list startup fallback skipped:', nexSmsResult.reason);
   }
   return restoreState().then(() => {
     syncPasswordToggleLabel();
