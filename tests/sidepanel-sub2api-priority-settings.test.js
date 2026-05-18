@@ -41,7 +41,7 @@ test('sidepanel persists and locks SUB2API account priority setting', () => {
     /inputSub2ApiAccountPriority\.value = String\(normalizeSub2ApiAccountPriorityValue\(state\?\.sub2apiAccountPriority\)\);/
   );
   assert.match(source, /applyFlowSettingsGroupVisibility\(visibleGroupIds\);/);
-  assert.match(flowRegistrySource, /'openai-source-sub2api': \{[\s\S]*'row-sub2api-account-priority'/);
+  assert.match(flowRegistrySource, /'openai-target-sub2api': \{[\s\S]*'row-sub2api-account-priority'/);
   assert.match(source, /inputSub2ApiAccountPriority\.disabled = locked;/);
   assert.match(
     source,

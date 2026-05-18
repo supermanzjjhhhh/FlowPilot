@@ -8847,6 +8847,14 @@ function isSignupUserAlreadyExistsFailure(error) {
   return /SIGNUP_USER_ALREADY_EXISTS::|user_already_exists/i.test(message);
 }
 
+function isKiroProxyFailure(error) {
+  if (typeof loggingStatus !== 'undefined' && loggingStatus?.isKiroProxyFailure) {
+    return loggingStatus.isKiroProxyFailure(error);
+  }
+  const message = getErrorMessage(error);
+  return /Kiro\s*(?:注册页|桌面授权页).*(?:CloudFront\s*拒绝请求|AWS\s*请求异常)|(?:当前代理\s*IP|出口区域异常).*(?:切换代理|更换代理)|AWS\s*风控.*(?:切换代理|更换代理)/i.test(message);
+}
+
 function isStep4Route405RecoveryLimitFailure(error) {
   const message = getErrorMessage(error);
   return /STEP4_405_RECOVERY_LIMIT::|步骤\s*4：检测到\s*405\s*错误页面，已连续点击“重试”恢复/i.test(message);
@@ -11752,6 +11760,7 @@ const autoRunController = self.MultiPageBackgroundAutoRunController?.createAutoR
   isPhoneSmsPlatformRateLimitFailure,
   isPlusCheckoutNonFreeTrialFailure,
   isGpcTaskEndedFailure,
+  isKiroProxyFailure,
   isRestartCurrentAttemptError,
   isStep4Route405RecoveryLimitFailure,
   isSignupUserAlreadyExistsFailure,
