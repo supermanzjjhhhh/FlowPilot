@@ -41,7 +41,6 @@ importScripts(
   'background/message-router.js',
   'background/verification-flow.js',
   'background/auto-run-controller.js',
-  'background/plus-hosted-checkout-success.js',
   'background/tab-runtime.js',
   'background/navigation-utils.js',
   'background/logging-status.js',
@@ -858,19 +857,6 @@ function buildResolvedStepDefinitionState(state = {}) {
     || capabilityState?.effectiveSignupMethod
     || requestedSignupMethod
   );
-  const resolvedPlusAccountAccessStrategy = normalizePlusAccountAccessStrategy(
-    stepDefinitionOptions.plusAccountAccessStrategy
-    ?? capabilityState?.effectivePlusAccountAccessStrategy
-    ?? state?.plusAccountAccessStrategy
-  );
-  const effectivePlusAccountAccessStrategy = (
-    resolvedActiveFlowId === defaultFlowId
-    && plusModeEnabled
-    && Boolean(state?.accountContributionEnabled)
-    && resolvedSignupMethod === SIGNUP_METHOD_EMAIL
-  )
-    ? PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION
-    : resolvedPlusAccountAccessStrategy;
 
   return {
     ...state,
@@ -882,7 +868,11 @@ function buildResolvedStepDefinitionState(state = {}) {
       ? plusModeEnabled
       : Boolean(stepDefinitionOptions.plusModeEnabled),
     plusPaymentMethod,
-    plusAccountAccessStrategy: effectivePlusAccountAccessStrategy,
+    plusAccountAccessStrategy: normalizePlusAccountAccessStrategy(
+      stepDefinitionOptions.plusAccountAccessStrategy
+      ?? capabilityState?.effectivePlusAccountAccessStrategy
+      ?? state?.plusAccountAccessStrategy
+    ),
     signupMethod: resolvedSignupMethod,
     resolvedSignupMethod: resolvedSignupMethod,
     phoneSignupReloginAfterBindEmailEnabled: Boolean(state?.phoneSignupReloginAfterBindEmailEnabled),
@@ -1160,7 +1150,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   customPassword: '',
   plusModeEnabled: false,
   plusPaymentMethod: DEFAULT_PLUS_PAYMENT_METHOD,
-  plusAccountAccessStrategy: 'sub2api_codex_session',
+  plusAccountAccessStrategy: 'oauth',
   paypalEmail: '',
   paypalPassword: '',
   currentPayPalAccountId: '',
@@ -10531,7 +10521,6 @@ let resumeWaiter = null;
 const AUTO_RUN_SIGNAL_COMPLETION_TIMEOUT_MS = 120000;
 const AUTO_RUN_STEP_IDLE_LOG_TIMEOUT_MS = 5 * 60 * 1000;
 const AUTO_RUN_STEP_IDLE_LOG_CHECK_INTERVAL_MS = 5000;
-const HOSTED_CHECKOUT_SUCCESS_SIGNAL_TIMEOUT_MS = 30 * 60 * 1000;
 const AUTO_RUN_STEP_IDLE_RESTART_MAX_ATTEMPTS = 3;
 const AUTO_RUN_STEP_IDLE_RESTART_ERROR_PREFIX = 'AUTO_RUN_STEP_IDLE_RESTART::';
 const AUTO_RUN_BACKGROUND_COMPLETED_STEPS = new Set([1, 2, 4, 6, 7, 8, 9]);
@@ -10541,6 +10530,7 @@ const AUTO_RUN_BACKGROUND_COMPLETED_STEP_KEYS = new Set([
   'submit-signup-email',
   'fetch-signup-code',
   'wait-registration-success',
+  'plus-checkout-create',
   'plus-checkout-billing',
   'paypal-approve',
   'plus-checkout-return',
@@ -10568,7 +10558,6 @@ const AUTO_RUN_BACKGROUND_COMPLETED_STEP_KEYS = new Set([
 const STEP_COMPLETION_SIGNAL_STEP_KEYS = new Set([
   'fill-password',
   'fill-profile',
-  'plus-checkout-create',
   'gopay-subscription-confirm',
   'platform-verify',
 ]);
@@ -10676,46 +10665,13 @@ function getAutoRunPreExecutionDelayMs(step, state = {}) {
   return getAutoRunPreExecutionDelayMsForNode(getNodeIdByStepForState(step, state), state);
 }
 
-function isHostedCheckoutSuccessCompletionNode(nodeId, state = {}) {
-  const executionKey = getNodeExecutionKeyForState(nodeId, state);
-  if ((executionKey || nodeId) !== 'plus-checkout-create') {
-    return false;
-  }
-  if (!state?.plusModeEnabled) {
-    return false;
-  }
-  const paymentMethod = String(state?.plusPaymentMethod || '').trim().toLowerCase();
-  if (paymentMethod !== 'paypal') {
-    return false;
-  }
-  const signupMethod = String(state?.resolvedSignupMethod || state?.signupMethod || 'email').trim().toLowerCase();
-  if (signupMethod === 'phone') {
-    return false;
-  }
-  if (Boolean(state?.accountContributionEnabled)) {
-    return true;
-  }
-  const strategy = normalizePlusAccountAccessStrategy(state?.plusAccountAccessStrategy);
-  return strategy === PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION
-    || strategy === PLUS_ACCOUNT_ACCESS_STRATEGY_CPA_CODEX_SESSION;
-}
-
 function getNodeCompletionSignalTimeoutMs(nodeId, state = {}) {
-  if (isHostedCheckoutSuccessCompletionNode(nodeId, state)) {
-    return HOSTED_CHECKOUT_SUCCESS_SIGNAL_TIMEOUT_MS;
-  }
   const executionKey = getNodeExecutionKeyForState(nodeId, state);
   return STEP_COMPLETION_SIGNAL_TIMEOUTS_BY_STEP_KEY.get(executionKey || nodeId) || AUTO_RUN_SIGNAL_COMPLETION_TIMEOUT_MS;
 }
 
 function getStepCompletionSignalTimeoutMs(step, state = {}) {
   return getNodeCompletionSignalTimeoutMs(getNodeIdByStepForState(step, state), state);
-}
-
-function getAutoRunNodeIdleLogTimeoutMs(nodeId, state = {}) {
-  return isHostedCheckoutSuccessCompletionNode(nodeId, state)
-    ? HOSTED_CHECKOUT_SUCCESS_SIGNAL_TIMEOUT_MS
-    : AUTO_RUN_STEP_IDLE_LOG_TIMEOUT_MS;
 }
 
 function notifyNodeComplete(nodeId, payload) {
@@ -11018,19 +10974,10 @@ async function runAutoNodeActionWithIdleLogWatchdog(nodeId, action, options = {}
 }
 
 async function executeNodeAndWaitWithAutoRunIdleLogWatchdog(nodeId, delayAfter = 2000, options = {}) {
-  const executionState = await getState();
-  const idleTimeoutMs = Number(options.idleTimeoutMs) > 0
-    ? Number(options.idleTimeoutMs)
-    : (typeof getAutoRunNodeIdleLogTimeoutMs === 'function'
-      ? getAutoRunNodeIdleLogTimeoutMs(nodeId, executionState)
-      : AUTO_RUN_STEP_IDLE_LOG_TIMEOUT_MS);
   return runAutoNodeActionWithIdleLogWatchdog(
     nodeId,
     () => executeNodeAndWait(nodeId, delayAfter),
-    {
-      ...options,
-      idleTimeoutMs,
-    }
+    options
   );
 }
 
@@ -13494,16 +13441,6 @@ const plusReturnConfirmExecutor = self.MultiPageBackgroundPlusReturnConfirm?.cre
   sleepWithStop,
   waitForTabUrlMatchUntilStopped,
 });
-const plusHostedCheckoutSuccessManager = self.MultiPagePlusHostedCheckoutSuccess?.createPlusHostedCheckoutSuccessManager({
-  addLog,
-  completeNodeFromBackground,
-  failNodeFromBackground: async (nodeId, message) => {
-    notifyNodeError(nodeId, message);
-    await finalizeDeferredNodeExecutionError(nodeId, new Error(message));
-  },
-  getState,
-  setState,
-});
 const sub2ApiSessionImportExecutor = self.MultiPageBackgroundSub2ApiSessionImport?.createSub2ApiSessionImportExecutor({
   addLog,
   chrome,
@@ -15602,12 +15539,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       console.error(LOG_PREFIX, 'Failed to run IP proxy auto sync alarm:', err);
     });
   }
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  plusHostedCheckoutSuccessManager?.handleTabUpdated(tabId, changeInfo, tab).catch((err) => {
-    console.error(LOG_PREFIX, 'Failed to process PayPal hosted checkout success page:', err);
-  });
 });
 
 chrome.runtime.onStartup.addListener(() => {

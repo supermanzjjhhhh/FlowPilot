@@ -115,14 +115,13 @@ return {
 `)();
 }
 
-test('sidepanel keeps requested SUB2API session strategy independent from the selected target', () => {
+test('sidepanel keeps requested Plus account strategy while OAuth-only targets force the effective value', () => {
   const api = buildHarness(
     `{
       canShowPlusSettings: true,
       runtimeLocks: { plusModeEnabled: true },
-      canEditPlusAccountAccessStrategy: true,
-      availablePlusAccountAccessStrategies: ['oauth', 'cpa_codex_session', 'sub2api_codex_session'],
-      effectivePlusAccountAccessStrategy: 'sub2api_codex_session',
+      canEditPlusAccountAccessStrategy: false,
+      effectivePlusAccountAccessStrategy: 'oauth',
     }`,
     `{
       activeFlowId: 'openai',
@@ -135,11 +134,11 @@ test('sidepanel keeps requested SUB2API session strategy independent from the se
   api.updatePlusModeUI();
 
   assert.equal(api.rowPlusAccountAccessStrategy.style.display, '');
-  assert.equal(api.selectPlusAccountAccessStrategy.disabled, false);
+  assert.equal(api.selectPlusAccountAccessStrategy.disabled, true);
   assert.equal(api.selectPlusAccountAccessStrategy.dataset.requestedValue, 'sub2api_codex_session');
-  assert.equal(api.selectPlusAccountAccessStrategy.value, 'sub2api_codex_session');
+  assert.equal(api.selectPlusAccountAccessStrategy.value, 'oauth');
   assert.equal(api.getRequestedPlusAccountAccessStrategy(), 'sub2api_codex_session');
-  assert.match(api.plusAccountAccessStrategyCaption.textContent, /SUB2API/);
+  assert.match(api.plusAccountAccessStrategyCaption.textContent, /OAuth/);
 });
 
 test('sidepanel enables SUB2API session strategy selection when the current Plus target supports it', () => {
@@ -284,7 +283,6 @@ return {
         plusAccountAccessStrategy: 'sub2api_codex_session',
         signupMethod: 'email',
         phoneSignupReloginAfterBindEmailEnabled: false,
-        accountContributionEnabled: false,
       },
     },
     {
@@ -296,7 +294,6 @@ return {
         plusAccountAccessStrategy: 'sub2api_codex_session',
         signupMethod: 'email',
         phoneSignupReloginAfterBindEmailEnabled: false,
-        accountContributionEnabled: false,
       },
     },
   ]);
