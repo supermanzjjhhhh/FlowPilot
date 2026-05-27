@@ -553,6 +553,18 @@
           <button id="btn-mail-login" class="btn btn-outline btn-sm data-inline-btn" type="button" disabled>登录</button>
         </div>
       </div>
+      <div class="data-row" id="row-custom-mail-receive-mode" style="display:none;">
+        <span class="data-label">收码方式</span>
+        <select id="select-custom-mail-receive-mode" class="data-select">
+          <option value="manual">手动确认</option>
+          <option value="helper">本地 helper</option>
+        </select>
+      </div>
+      <div class="data-row" id="row-custom-mail-helper-base-url" style="display:none;">
+        <span class="data-label">helper 地址</span>
+        <input type="text" id="input-custom-mail-helper-base-url" class="data-input"
+          placeholder="http://127.0.0.1:17374" />
+      </div>
       <div class="data-row data-check-row" id="row-custom-mail-provider-pool" style="display:none;">
         <span class="data-label">自定义号池</span>
         <textarea id="input-custom-mail-provider-pool" class="data-textarea"

@@ -262,6 +262,10 @@ const rowGoPayPin = document.getElementById('row-gopay-pin');
 const inputGoPayPin = document.getElementById('input-gopay-pin');
 const selectMailProvider = document.getElementById('select-mail-provider');
 const btnMailLogin = document.getElementById('btn-mail-login');
+const rowCustomMailReceiveMode = document.getElementById('row-custom-mail-receive-mode');
+const selectCustomMailReceiveMode = document.getElementById('select-custom-mail-receive-mode');
+const rowCustomMailHelperBaseUrl = document.getElementById('row-custom-mail-helper-base-url');
+const inputCustomMailHelperBaseUrl = document.getElementById('input-custom-mail-helper-base-url');
 const rowCustomMailProviderPool = document.getElementById('row-custom-mail-provider-pool');
 const inputCustomMailProviderPool = document.getElementById('input-custom-mail-provider-pool');
 const rowMail2925Mode = document.getElementById('row-mail-2925-mode');
@@ -830,6 +834,10 @@ const DEFAULT_CPA_CALLBACK_MODE = 'step8';
 const MAIL_2925_MODE_PROVIDE = 'provide';
 const MAIL_2925_MODE_RECEIVE = 'receive';
 const DEFAULT_MAIL_2925_MODE = MAIL_2925_MODE_PROVIDE;
+const CUSTOM_MAIL_RECEIVE_MODE_MANUAL = 'manual';
+const CUSTOM_MAIL_RECEIVE_MODE_HELPER = 'helper';
+const DEFAULT_CUSTOM_MAIL_RECEIVE_MODE = CUSTOM_MAIL_RECEIVE_MODE_MANUAL;
+const DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL = 'http://127.0.0.1:17374';
 const CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_RECEIVE_MAILBOX = 'receive-mailbox';
 const CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_REGISTRATION_EMAIL = 'registration-email';
 const DEFAULT_CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE = CLOUDFLARE_TEMP_EMAIL_LOOKUP_MODE_RECEIVE_MAILBOX;
@@ -5161,6 +5169,14 @@ function collectSettingsPayload() {
     mailProvider: selectMailProvider.value,
     mail2925Mode: getSelectedMail2925Mode(),
     mail2925UseAccountPool,
+    customMailReceiveMode: typeof getSelectedCustomMailReceiveMode === 'function'
+      ? getSelectedCustomMailReceiveMode()
+      : 'manual',
+    customMailHelperBaseUrl: typeof normalizeCustomMailHelperBaseUrl === 'function'
+      ? normalizeCustomMailHelperBaseUrl(typeof inputCustomMailHelperBaseUrl !== 'undefined' && inputCustomMailHelperBaseUrl
+        ? inputCustomMailHelperBaseUrl.value
+        : '')
+      : 'http://127.0.0.1:17374',
     currentMail2925AccountId: String(latestState?.currentMail2925AccountId || '').trim(),
     emailGenerator: selectEmailGenerator.value,
     customMailProviderPool: typeof normalizeCustomEmailPoolEntries === 'function'
@@ -5277,6 +5293,34 @@ function normalizeMail2925Mode(value = '') {
   return String(value || '').trim().toLowerCase() === MAIL_2925_MODE_RECEIVE
     ? MAIL_2925_MODE_RECEIVE
     : DEFAULT_MAIL_2925_MODE;
+}
+
+function normalizeCustomMailReceiveMode(value = '') {
+  return String(value || '').trim().toLowerCase() === CUSTOM_MAIL_RECEIVE_MODE_HELPER
+    ? CUSTOM_MAIL_RECEIVE_MODE_HELPER
+    : DEFAULT_CUSTOM_MAIL_RECEIVE_MODE;
+}
+
+function getSelectedCustomMailReceiveMode() {
+  return normalizeCustomMailReceiveMode(selectCustomMailReceiveMode?.value);
+}
+
+function normalizeCustomMailHelperBaseUrl(value = '') {
+  const trimmed = String(value || '').trim();
+  const candidate = trimmed || DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL;
+  try {
+    const parsed = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL;
+    }
+    parsed.hash = '';
+    parsed.search = '';
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    const path = parsed.pathname === '/' ? '' : parsed.pathname;
+    return `${parsed.origin}${path}` || DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL;
+  } catch {
+    return DEFAULT_CUSTOM_MAIL_HELPER_BASE_URL;
+  }
 }
 
 function normalizeCloudflareTempEmailLookupMode(value = '') {
@@ -11442,6 +11486,16 @@ function applySettingsState(state) {
       ? 'custom'
       : '163');
   selectMailProvider.value = restoredMailProvider;
+  if (typeof selectCustomMailReceiveMode !== 'undefined' && selectCustomMailReceiveMode) {
+    selectCustomMailReceiveMode.value = typeof normalizeCustomMailReceiveMode === 'function'
+      ? normalizeCustomMailReceiveMode(state?.customMailReceiveMode)
+      : (String(state?.customMailReceiveMode || '').trim().toLowerCase() === 'helper' ? 'helper' : 'manual');
+  }
+  if (typeof inputCustomMailHelperBaseUrl !== 'undefined' && inputCustomMailHelperBaseUrl) {
+    inputCustomMailHelperBaseUrl.value = typeof normalizeCustomMailHelperBaseUrl === 'function'
+      ? normalizeCustomMailHelperBaseUrl(state?.customMailHelperBaseUrl)
+      : (String(state?.customMailHelperBaseUrl || '').trim() || 'http://127.0.0.1:17374');
+  }
   setMail2925Mode(state?.mail2925Mode);
   {
     const restoredEmailGenerator = String(state?.emailGenerator || '').trim().toLowerCase();
@@ -13041,6 +13095,12 @@ function updateMailProviderUI() {
   }
   if (typeof rowCustomMailProviderPool !== 'undefined' && rowCustomMailProviderPool) {
     rowCustomMailProviderPool.style.display = useCustomEmail ? '' : 'none';
+  }
+  if (typeof rowCustomMailReceiveMode !== 'undefined' && rowCustomMailReceiveMode) {
+    rowCustomMailReceiveMode.style.display = useCustomEmail ? '' : 'none';
+  }
+  if (typeof rowCustomMailHelperBaseUrl !== 'undefined' && rowCustomMailHelperBaseUrl) {
+    rowCustomMailHelperBaseUrl.style.display = useCustomEmail && getSelectedCustomMailReceiveMode() === CUSTOM_MAIL_RECEIVE_MODE_HELPER ? '' : 'none';
   }
   rowEmailPrefix.style.display = useGeneratedAlias && !useMail2925AccountPool ? '' : 'none';
   const hotmailServiceMode = getSelectedHotmailServiceMode();
@@ -15757,6 +15817,32 @@ selectMailProvider.addEventListener('change', async () => {
   }
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+});
+
+[
+  selectCustomMailReceiveMode,
+  inputCustomMailHelperBaseUrl,
+].forEach((input) => {
+  input?.addEventListener('input', () => {
+    if (input === selectCustomMailReceiveMode) {
+      updateMailProviderUI();
+    }
+    markSettingsDirty(true);
+    scheduleSettingsAutoSave();
+  });
+  input?.addEventListener('change', () => {
+    if (input === selectCustomMailReceiveMode) {
+      updateMailProviderUI();
+    }
+    markSettingsDirty(true);
+    saveSettings({ silent: true }).catch(() => { });
+  });
+  input?.addEventListener('blur', () => {
+    if (input === inputCustomMailHelperBaseUrl) {
+      inputCustomMailHelperBaseUrl.value = normalizeCustomMailHelperBaseUrl(inputCustomMailHelperBaseUrl.value);
+    }
+    saveSettings({ silent: true }).catch(() => { });
+  });
 });
 
 mail2925ModeButtons.forEach((button) => {

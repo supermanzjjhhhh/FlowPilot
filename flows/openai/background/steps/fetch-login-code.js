@@ -32,6 +32,7 @@
       phoneVerificationHelpers = null,
       setState,
       shouldUseCustomRegistrationEmail,
+      shouldUseCustomMailHelper = () => false,
       sleepWithStop,
       STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
       STEP7_MAIL_POLLING_RECOVERY_MAX_ATTEMPTS,
@@ -594,7 +595,7 @@
         await addLog(`步骤 ${visibleStep}：已固定当前验证码页显示邮箱 ${displayedVerificationEmail} 作为后续匹配目标。`, 'info');
       }
 
-      if (shouldUseCustomRegistrationEmail(preparedState)) {
+      if (shouldUseCustomRegistrationEmail(preparedState) && !shouldUseCustomMailHelper(preparedState)) {
         await confirmCustomVerificationStepBypass(8, {
           completionStep: visibleStep,
           promptStep: visibleStep,
@@ -617,6 +618,7 @@
         || mail.provider === LUCKMAIL_PROVIDER
         || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER
         || mail.provider === CLOUD_MAIL_PROVIDER
+        || shouldUseCustomMailHelper(preparedState)
       ) {
         await addLog(`步骤 ${visibleStep}：正在通过 ${mail.label} 轮询验证码...`);
       } else {

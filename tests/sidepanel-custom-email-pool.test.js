@@ -60,6 +60,10 @@ test('sidepanel html exposes custom email pool generator option and input row', 
   assert.match(html, /id="input-custom-email-pool-import"/);
   assert.match(html, /id="custom-email-pool-list"/);
   assert.match(html, /id="btn-custom-email-pool-bulk-used"/);
+  assert.match(html, /id="row-custom-mail-receive-mode"/);
+  assert.match(html, /id="select-custom-mail-receive-mode"/);
+  assert.match(html, /id="row-custom-mail-helper-base-url"/);
+  assert.match(html, /id="input-custom-mail-helper-base-url"/);
   assert.match(html, /id="row-custom-mail-provider-pool"/);
   assert.match(html, /id="input-custom-mail-provider-pool"/);
 });
@@ -184,6 +188,19 @@ test('sidepanel queues custom email pool refresh when the pool row is visible', 
   assert.match(
     source,
     /if \(useCustomEmailPool\) \{\s*syncRunCountFromCustomEmailPool\(\);\s*if \(typeof queueCustomEmailPoolRefresh === 'function'\) \{\s*queueCustomEmailPoolRefresh\(\);\s*\}\s*\}/
+  );
+});
+
+test('sidepanel only shows custom mail helper url when helper receive mode is selected', () => {
+  const source = extractFunction('updateMailProviderUI');
+
+  assert.match(
+    source,
+    /rowCustomMailReceiveMode\.style\.display = useCustomEmail \? '' : 'none'/
+  );
+  assert.match(
+    source,
+    /rowCustomMailHelperBaseUrl\.style\.display = useCustomEmail && getSelectedCustomMailReceiveMode\(\) === CUSTOM_MAIL_RECEIVE_MODE_HELPER \? '' : 'none'/
   );
 });
 

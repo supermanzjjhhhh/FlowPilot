@@ -81,6 +81,8 @@ const SETTINGS_SCHEMA_VIEW_KEYS = Object.freeze([
   'plusPaymentMethod',
   'plusAccountAccessStrategy',
   'mailProvider',
+  'customMailReceiveMode',
+  'customMailHelperBaseUrl',
   'ipProxyEnabled',
   'ipProxyService',
   'ipProxyMode',
@@ -98,6 +100,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   plusAccountAccessStrategy: 'oauth',
   phoneVerificationEnabled: false,
   mailProvider: '163',
+  customMailReceiveMode: 'manual',
+  customMailHelperBaseUrl: 'http://127.0.0.1:17374',
   ipProxyEnabled: false,
   ipProxyService: '711proxy',
   ipProxyMode: 'account',
@@ -135,6 +139,24 @@ function normalizeCloudflareDomains(value) { return Array.isArray(value) ? value
 function normalizeCloudflareTempEmailDomains(value) { return Array.isArray(value) ? value : []; }
 function normalizeCloudMailDomains(value) { return Array.isArray(value) ? value : []; }
 function normalizeMailProvider(value = '') { return String(value || '163').trim().toLowerCase() || '163'; }
+function normalizeCustomMailReceiveMode(value = '') { return String(value || '').trim().toLowerCase() === 'helper' ? 'helper' : 'manual'; }
+function normalizeCustomMailHelperBaseUrl(value = '') {
+  const trimmed = String(value || '').trim();
+  const candidate = trimmed || 'http://127.0.0.1:17374';
+  try {
+    const parsed = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'http://127.0.0.1:17374';
+    }
+    parsed.hash = '';
+    parsed.search = '';
+    parsed.pathname = parsed.pathname.replace(/[/]+$/, '');
+    const path = parsed.pathname === '/' ? '' : parsed.pathname;
+    return (parsed.origin + path) || 'http://127.0.0.1:17374';
+  } catch {
+    return 'http://127.0.0.1:17374';
+  }
+}
 function normalizeStepExecutionRangeByFlow(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
 function normalizeIpProxyProviderValue(value) { return String(value || '711proxy').trim() || '711proxy'; }
 function normalizeIpProxyMode(value) { return String(value || 'account').trim() || 'account'; }
@@ -562,6 +584,49 @@ function getRemovedKeys() {
   assert.equal(persisted.settingsState.services.email.provider, 'cloudflare-temp-email');
   assert.equal(write.settingsState.services.email.provider, 'cloudflare-temp-email');
   assert.equal(Object.prototype.hasOwnProperty.call(write, 'mailProvider'), false);
+});
+
+test('setPersistentSettings mirrors custom mail helper mode into canonical email settings', async () => {
+  const api = buildHarness(`
+const persistedWrites = [];
+const removedKeys = [];
+const chrome = {
+  storage: {
+    local: {
+      async get() {
+        return {};
+      },
+      async remove(keys) {
+        removedKeys.push(...(Array.isArray(keys) ? keys : [keys]));
+      },
+      async set(payload) {
+        persistedWrites.push(JSON.parse(JSON.stringify(payload)));
+      },
+    },
+  },
+};
+function getPersistedWrites() {
+  return persistedWrites;
+}
+function getRemovedKeys() {
+  return removedKeys;
+}
+`);
+
+  const persisted = await api.setPersistentSettings({
+    mailProvider: 'custom',
+    customMailReceiveMode: 'helper',
+    customMailHelperBaseUrl: 'http://127.0.0.1:17374/',
+  });
+  const write = api.getPersistedWrites().at(-1);
+
+  assert.equal(persisted.mailProvider, 'custom');
+  assert.equal(persisted.customMailReceiveMode, 'helper');
+  assert.equal(persisted.customMailHelperBaseUrl, 'http://127.0.0.1:17374');
+  assert.equal(write.settingsState.services.email.provider, 'custom');
+  assert.equal(write.settingsState.services.email.customReceiveMode, 'helper');
+  assert.equal(write.settingsState.services.email.customHelperBaseUrl, 'http://127.0.0.1:17374');
+  assert.equal(Object.prototype.hasOwnProperty.call(write, 'customMailReceiveMode'), false);
 });
 
 test('setPersistentSettings mirrors flat schema updates without resetting other canonical settings', async () => {

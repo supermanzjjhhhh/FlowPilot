@@ -69,6 +69,7 @@
       chrome = (typeof globalThis !== 'undefined' ? globalThis.chrome : null),
       CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email',
       CLOUD_MAIL_PROVIDER = 'cloudmail',
+      CUSTOM_MAIL_PROVIDER = 'custom',
       ensureIcloudMailSession = null,
       ensureMail2925MailboxSession = null,
       getMailConfig = null,
@@ -81,11 +82,13 @@
       LUCKMAIL_PROVIDER = 'luckmail-api',
       pollCloudflareTempEmailVerificationCode = null,
       pollCloudMailVerificationCode = null,
+      pollCustomMailVerificationCode = null,
       pollHotmailVerificationCode = null,
       pollLuckmailVerificationCode = null,
       pollYydsMailVerificationCode = null,
       reuseOrCreateTab = async () => null,
       sendToMailContentScriptResilient = null,
+      shouldUseCustomMailHelper = null,
       throwIfStopped = () => {},
       YYDS_MAIL_PROVIDER = 'yyds-mail',
     } = deps;
@@ -106,6 +109,10 @@
       [normalizeProviderId(CLOUD_MAIL_PROVIDER), {
         label: 'Cloud Mail',
         poll: pollCloudMailVerificationCode,
+      }],
+      [normalizeProviderId(CUSTOM_MAIL_PROVIDER), {
+        label: '自定义邮箱本地助手',
+        poll: pollCustomMailVerificationCode,
       }],
       [normalizeProviderId(YYDS_MAIL_PROVIDER), {
         label: 'YYDS Mail',
@@ -167,10 +174,25 @@
       return normalizeProviderId(mail?.provider) === '2925';
     }
 
+    function isCustomMailProvider(mail = {}) {
+      return normalizeProviderId(mail?.provider) === normalizeProviderId(CUSTOM_MAIL_PROVIDER);
+    }
+
+    function canUseCustomMailHelper(state = {}) {
+      if (typeof shouldUseCustomMailHelper === 'function') {
+        return Boolean(shouldUseCustomMailHelper(state));
+      }
+      return normalizeProviderId(state?.mailProvider) === normalizeProviderId(CUSTOM_MAIL_PROVIDER)
+        && normalizeProviderId(state?.customMailReceiveMode) === 'helper';
+    }
+
     async function pollThroughApiProvider(providerId, step, state, pollPayload, mail, options) {
       const handler = apiProviderHandlers.get(providerId);
       if (!handler) {
         return null;
+      }
+      if (isCustomMailProvider(mail) && !canUseCustomMailHelper(state)) {
+        throw new Error('自定义邮箱当前为手动确认模式，未启用本地 helper 自动收码。');
       }
       if (typeof handler.poll !== 'function') {
         throw new Error(`${handler.label} 邮箱轮询能力未接入，无法继续执行。`);

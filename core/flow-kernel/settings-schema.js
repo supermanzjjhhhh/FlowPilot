@@ -88,6 +88,25 @@
       return 'oauth';
     };
 
+    const normalizeCustomMailHelperBaseUrl = (value = '') => {
+      const fallback = 'http://127.0.0.1:17374';
+      const trimmed = String(value || '').trim();
+      const candidate = trimmed || fallback;
+      try {
+        const parsed = new URL(candidate);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          return fallback;
+        }
+        parsed.hash = '';
+        parsed.search = '';
+        parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+        const path = parsed.pathname === '/' ? '' : parsed.pathname;
+        return `${parsed.origin}${path}` || fallback;
+      } catch {
+        return fallback;
+      }
+    };
+
     function getCanonicalFlowIds() {
       const ids = Array.isArray(getRegisteredFlowIds())
         ? getRegisteredFlowIds()
@@ -184,6 +203,8 @@
           },
           email: {
             provider: '163',
+            customReceiveMode: 'manual',
+            customHelperBaseUrl: 'http://127.0.0.1:17374',
           },
           proxy: {
             enabled: false,
@@ -477,6 +498,16 @@
               ?? input?.mailProvider
               ?? defaults.services.email.provider
             ).trim() || defaults.services.email.provider,
+            customReceiveMode: String(
+              nested?.services?.email?.customReceiveMode
+              ?? input?.customMailReceiveMode
+              ?? defaults.services.email.customReceiveMode
+            ).trim().toLowerCase() === 'helper' ? 'helper' : defaults.services.email.customReceiveMode,
+            customHelperBaseUrl: normalizeCustomMailHelperBaseUrl(
+              nested?.services?.email?.customHelperBaseUrl
+              ?? input?.customMailHelperBaseUrl
+              ?? defaults.services.email.customHelperBaseUrl
+            ),
           },
           proxy: {
             enabled: Boolean(
@@ -608,6 +639,8 @@
       next.hostedCheckoutPhoneNumber = openaiState.plus?.hostedCheckoutPhoneNumber || '';
       next.plusHostedCheckoutOauthDelaySeconds = openaiState.plus?.plusHostedCheckoutOauthDelaySeconds ?? 3;
       next.mailProvider = normalizedState.services.email.provider;
+      next.customMailReceiveMode = normalizedState.services.email.customReceiveMode;
+      next.customMailHelperBaseUrl = normalizedState.services.email.customHelperBaseUrl;
       next.ipProxyEnabled = normalizedState.services.proxy.enabled;
       next.ipProxyService = normalizedState.services.proxy.provider;
       next.ipProxyMode = normalizedState.services.proxy.mode;
