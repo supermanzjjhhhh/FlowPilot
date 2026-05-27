@@ -5767,6 +5767,40 @@ async function waitForLoginEntryOpenTransition(timeout = 10000) {
   return snapshot;
 }
 
+function isOpenAiOAuthAuthorizationRoute(rawUrl = '') {
+  const value = String(rawUrl || '').trim();
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value, location.href);
+    const hostname = String(parsed.hostname || '').toLowerCase();
+    if (!['auth.openai.com', 'auth0.openai.com', 'accounts.openai.com'].includes(hostname)) {
+      return false;
+    }
+
+    const pathname = parsed.pathname || '/';
+    return /^\/(?:authorize|oauth(?:2)?\/|api\/oauth\/oauth2\/auth|sign-in-with-chatgpt\/)/i.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+function isPostChooseAccountOAuthRoute(snapshot = {}) {
+  const url = String(snapshot?.url || location.href || '').trim();
+  if (!isOpenAiOAuthAuthorizationRoute(url)) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(url, location.href);
+    return !/\/choose-an-account(?:[/?#]|$)/i.test(parsed.pathname || '');
+  } catch {
+    return !/\/choose-an-account(?:[/?#]|$)/i.test(url);
+  }
+}
+
 async function waitForChooseAccountTransition(timeout = 15000) {
   const start = Date.now();
   let snapshot = normalizeStep6Snapshot(inspectLoginAuthState());
@@ -5774,6 +5808,12 @@ async function waitForChooseAccountTransition(timeout = 15000) {
   while (Date.now() - start < timeout) {
     throwIfStopped();
     snapshot = normalizeStep6Snapshot(inspectLoginAuthState());
+    if (isPostChooseAccountOAuthRoute(snapshot)) {
+      return {
+        ...snapshot,
+        oauthAuthorizationRoute: true,
+      };
+    }
     if (snapshot.state !== 'unknown' && snapshot.state !== 'choose_account_page') {
       return snapshot;
     }
@@ -5824,6 +5864,11 @@ async function step6ChooseExistingAccount(payload, snapshot) {
   if (nextSnapshot.state === 'oauth_consent_page') {
     return createStep6OAuthConsentSuccessResult(nextSnapshot, {
       via: 'choose_account_oauth_consent_page',
+    });
+  }
+  if (nextSnapshot.oauthAuthorizationRoute || isPostChooseAccountOAuthRoute(nextSnapshot)) {
+    return createStep6OAuthConsentSuccessResult(nextSnapshot, {
+      via: 'choose_account_oauth_authorization_route',
     });
   }
   if (nextSnapshot.state === 'add_email_page') {

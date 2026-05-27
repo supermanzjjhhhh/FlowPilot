@@ -253,6 +253,8 @@ ${extractFunction('createStep6OAuthConsentSuccessResult')}
 ${extractFunction('createStep6AddEmailSuccessResult')}
 ${extractFunction('createStep6RecoverableResult')}
 ${extractFunction('normalizeStep6Snapshot')}
+${extractFunction('isOpenAiOAuthAuthorizationRoute')}
+${extractFunction('isPostChooseAccountOAuthRoute')}
 ${extractFunction('waitForChooseAccountTransition')}
 ${extractFunction('step6ChooseExistingAccount')}
 
@@ -275,6 +277,113 @@ return {
   assert.equal(result.skipLoginVerificationStep, true);
   assert.equal(result.directOAuthConsentPage, true);
   assert.equal(result.via, 'choose_account_oauth_consent_page');
+});
+
+test('step 7 skips login code when choose-account leaves for OAuth authorize route before consent DOM is ready', async () => {
+  const api = new Function(`
+let pageState = 'choose_account_page';
+const clicked = [];
+const location = {
+  href: 'https://auth.openai.com/choose-an-account',
+  pathname: '/choose-an-account',
+};
+const targetCard = {
+  id: 'target-card',
+  textContent: 'Tall Slept Fancy tall-slept-fancy@duck.com',
+  value: '',
+  parentElement: null,
+  disabled: false,
+  getAttribute(name) {
+    if (name === 'role') return 'button';
+    if (name === 'aria-disabled') return 'false';
+    return '';
+  },
+  closest() {
+    return null;
+  },
+};
+
+const document = {
+  body: {
+    innerText: 'Welcome back Choose an account tall-slept-fancy@duck.com',
+    textContent: 'Welcome back Choose an account tall-slept-fancy@duck.com',
+  },
+  querySelectorAll(selector) {
+    if (String(selector).includes('body *')) return [targetCard];
+    return [targetCard];
+  },
+};
+
+function getOperationDelayRunner() {
+  return async (_metadata, operation) => operation();
+}
+function isVisibleElement(element) {
+  return Boolean(element);
+}
+function isActionEnabled(element) {
+  return Boolean(element) && !element.disabled && element.getAttribute('aria-disabled') !== 'true';
+}
+function simulateClick(element) {
+  clicked.push(element.id);
+  if (element === targetCard) {
+    pageState = 'unknown';
+    location.href = 'https://auth.openai.com/authorize?client_id=codex-test&state=oauth-state';
+    location.pathname = '/authorize';
+  }
+}
+function inspectLoginAuthState() {
+  return { state: pageState, url: location.href, chooseAccountPage: pageState === 'choose_account_page' };
+}
+function throwIfStopped() {}
+async function sleep() {}
+async function humanPause() {}
+function log() {}
+async function finalizeStep6VerificationReady() { return { routed: 'verification' }; }
+async function step6LoginFromPasswordPage() { return { routed: 'password' }; }
+async function step6LoginFromEmailPage() { return { routed: 'email' }; }
+async function step6LoginFromPhonePage() { return { routed: 'phone' }; }
+async function createStep6LoginTimeoutRecoveryTransition() { return { action: 'recoverable', result: { routed: 'timeout' } }; }
+
+${extractConst('CHOOSE_ACCOUNT_PAGE_PATTERN')}
+${extractConst('CHOOSE_ACCOUNT_REMOVE_ACTION_PATTERN')}
+${extractConst('CHOOSE_ACCOUNT_OTHER_ACCOUNT_PATTERN')}
+${extractConst('CHOOSE_ACCOUNT_ACTION_SELECTOR')}
+${extractFunction('getPageTextSnapshot')}
+${extractFunction('normalizeAuthAccountIdentifier')}
+${extractFunction('getChooseAccountCandidateText')}
+${extractFunction('isChooseAccountPage')}
+${extractFunction('isChooseAccountRemovalAction')}
+${extractFunction('resolveChooseAccountClickTarget')}
+${extractFunction('findChooseAccountButtonForEmail')}
+${extractFunction('createStep6SuccessResult')}
+${extractFunction('createStep6OAuthConsentSuccessResult')}
+${extractFunction('createStep6AddEmailSuccessResult')}
+${extractFunction('createStep6RecoverableResult')}
+${extractFunction('normalizeStep6Snapshot')}
+${extractFunction('isOpenAiOAuthAuthorizationRoute')}
+${extractFunction('isPostChooseAccountOAuthRoute')}
+${extractFunction('waitForChooseAccountTransition')}
+${extractFunction('step6ChooseExistingAccount')}
+
+return {
+  clicked,
+  run() {
+    return step6ChooseExistingAccount(
+      { email: 'tall-slept-fancy@duck.com', loginIdentifierType: 'email', visibleStep: 7 },
+      { state: 'choose_account_page', url: location.href }
+    );
+  },
+};
+`)();
+
+  const result = await api.run();
+
+  assert.deepEqual(api.clicked, ['target-card']);
+  assert.equal(result.step6Outcome, 'success');
+  assert.equal(result.state, 'unknown');
+  assert.equal(result.skipLoginVerificationStep, true);
+  assert.equal(result.directOAuthConsentPage, true);
+  assert.equal(result.via, 'choose_account_oauth_authorization_route');
 });
 
 test('step 7 does not click choose-account page when target email is missing', async () => {
@@ -350,6 +459,8 @@ ${extractFunction('createStep6OAuthConsentSuccessResult')}
 ${extractFunction('createStep6AddEmailSuccessResult')}
 ${extractFunction('createStep6RecoverableResult')}
 ${extractFunction('normalizeStep6Snapshot')}
+${extractFunction('isOpenAiOAuthAuthorizationRoute')}
+${extractFunction('isPostChooseAccountOAuthRoute')}
 ${extractFunction('waitForChooseAccountTransition')}
 ${extractFunction('step6ChooseExistingAccount')}
 
