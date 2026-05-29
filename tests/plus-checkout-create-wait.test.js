@@ -1013,6 +1013,15 @@ test('GPC checkout prepare opens page, fills segmented card key, and writes full
   const executeEvent = events.find((event) => event.type === 'execute-script' && Array.isArray(event.args));
   assert.equal(executeEvent.target.tabId, 77);
   assert.equal(executeEvent.args[1], JSON.stringify(session));
+  const chatGptTabCreate = events.find((event) => (
+    event.type === 'automation-tab-create'
+    && event.payload?.url === 'https://chatgpt.com/'
+  ));
+  assert.equal(chatGptTabCreate.payload.active, false);
+  assert.equal(
+    events.some((event) => event.type === 'tab-update' && event.tabId === 77 && event.payload?.active === true),
+    true
+  );
   const statePayload = events.find((event) => event.type === 'set-state')?.payload || {};
   assert.equal(statePayload.plusCheckoutTabId, 77);
   assert.equal(statePayload.plusCheckoutSource, 'gpc-helper');

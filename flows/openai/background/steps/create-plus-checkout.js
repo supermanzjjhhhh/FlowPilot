@@ -309,10 +309,11 @@ function FindProxyForURL(url, host) {
       return paymentMethod === PLUS_PAYMENT_METHOD_GOPAY ? 'GoPay' : 'PayPal';
     }
 
-    async function openFreshChatGptTabForCheckoutCreate() {
+    async function openFreshChatGptTabForCheckoutCreate(options = {}) {
+      const active = options?.active !== false;
       const tab = typeof createAutomationTab === 'function'
-        ? await createAutomationTab({ url: PLUS_CHECKOUT_ENTRY_URL, active: true })
-        : await chrome.tabs.create({ url: PLUS_CHECKOUT_ENTRY_URL, active: true });
+        ? await createAutomationTab({ url: PLUS_CHECKOUT_ENTRY_URL, active })
+        : await chrome.tabs.create({ url: PLUS_CHECKOUT_ENTRY_URL, active });
       const tabId = Number(tab?.id);
       if (!Number.isInteger(tabId)) {
         throw new Error('步骤 6：打开 ChatGPT 页面失败，无法创建订阅页。');
@@ -1609,13 +1610,19 @@ function FindProxyForURL(url, host) {
       await addLog('步骤 6：正在打开 GPC 页面并准备卡密充值模式...', 'info');
       const { tabId, portalUrl } = await openOrReuseGpcPortalTab(state);
       await addLog('步骤 6：正在从 ChatGPT 获取完整 session...', 'info');
-      const sessionTabId = await openFreshChatGptTabForCheckoutCreate();
+      const sessionTabId = await openFreshChatGptTabForCheckoutCreate({ active: false });
+      if (chrome?.tabs?.update) {
+        await chrome.tabs.update(tabId, { active: true }).catch(() => {});
+      }
       let session = null;
       try {
         session = await readSessionFromChatGptSessionTab(sessionTabId);
       } finally {
         if (chrome?.tabs?.remove && Number.isInteger(sessionTabId)) {
           await chrome.tabs.remove(sessionTabId).catch(() => {});
+        }
+        if (chrome?.tabs?.update) {
+          await chrome.tabs.update(tabId, { active: true }).catch(() => {});
         }
       }
 
