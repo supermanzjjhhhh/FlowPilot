@@ -57,6 +57,7 @@
 
   const DEFAULT_TARGET_CAPABILITIES = Object.freeze({
     supportsPhoneSignup: true,
+    supportsPhoneVerificationSettings: true,
     requiresPhoneSignupWarning: false,
     usesOauthTimeoutBudget: false,
     supportedPlusAccountAccessStrategies: Object.freeze([PLUS_ACCOUNT_ACCESS_STRATEGY_OAUTH]),
@@ -408,10 +409,13 @@
       const targetState = activeFlowId === 'openai'
         ? getOpenAiTargetCapabilities(effectiveTargetId)
         : defaultTargetCapabilities;
+      const canShowPhoneSettings = activeFlowId === 'openai'
+        && Boolean(flowState.supportsPhoneVerificationSettings)
+        && targetState.supportsPhoneVerificationSettings !== false;
       const runtimeLocks = {
         autoRunLocked: Boolean(options?.autoRunLocked ?? state?.autoRunLocked),
         accountContribution: Boolean(flowState.supportsAccountContribution) && Boolean(state?.accountContributionEnabled),
-        phoneVerificationEnabled: activeFlowId === 'openai' && flowState.supportsPhoneVerificationSettings && Boolean(state?.phoneVerificationEnabled),
+        phoneVerificationEnabled: canShowPhoneSettings && Boolean(state?.phoneVerificationEnabled),
         plusModeEnabled: activeFlowId === 'openai' && flowState.supportsPlusMode && Boolean(state?.plusModeEnabled),
         settingsMenuLocked: Boolean(options?.settingsMenuLocked ?? state?.settingsMenuLocked),
       };
@@ -489,10 +493,11 @@
         activeFlowId,
         canShowContributionMode: Boolean(flowState.supportsAccountContribution),
         canShowLuckmail: activeFlowId === 'openai' && Boolean(flowState.supportsLuckmail),
-        canShowPhoneSettings: activeFlowId === 'openai' && Boolean(flowState.supportsPhoneVerificationSettings),
+        canShowPhoneSettings,
         canShowPlusSettings: activeFlowId === 'openai' && Boolean(flowState.supportsPlusMode),
         canSwitchFlow: Boolean(flowState.canSwitchFlow),
         canEditPlusAccountAccessStrategy,
+        canSelectPhoneSignup: canSelectPhoneSignup,
         canUsePhoneSignup: canSelectPhoneSignup,
         canUseSelectedTarget: targetSupported,
         effectivePlusAccountAccessStrategy,
@@ -672,7 +677,7 @@
       if (
         changedKeySet.has('phoneVerificationEnabled')
         && Boolean(state?.phoneVerificationEnabled)
-        && !flowState.supportsPhoneVerificationSettings
+        && !capabilityState.canShowPhoneSettings
       ) {
         normalizedUpdates.phoneVerificationEnabled = false;
         errors.push({

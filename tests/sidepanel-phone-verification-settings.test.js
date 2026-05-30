@@ -881,6 +881,8 @@ const rowPhoneSmsProviderOrder = { style: { display: 'none' } };
 const rowPhoneSmsProviderOrderActions = { style: { display: 'none' } };
 const selectPhoneSmsProvider = { value: 'hero-sms' };
 const selectMaDaoMode = { value: 'routing_plan' };
+let selectedSignupMethod = SIGNUP_METHOD_EMAIL;
+let capabilityOverride = null;
 const btnTogglePhoneVerificationSection = {
   disabled: false,
   textContent: '',
@@ -1027,6 +1029,22 @@ const PHONE_SMS_PROVIDER_UI_DESCRIPTORS = ${JSON.stringify({
   },
 })};
 function getSelectedPhoneSmsProvider() { return selectPhoneSmsProvider.value; }
+function getSelectedFlowId() { return latestState.activeFlowId || 'openai'; }
+function getSelectedTargetId() { return latestState.targetId || 'cpa'; }
+function getSelectedSignupMethod() { return selectedSignupMethod; }
+function setSignupMethod(method) {
+  selectedSignupMethod = normalizeSignupMethod(method);
+  return selectedSignupMethod;
+}
+function resolveCurrentSidepanelCapabilities(options = {}) {
+  if (capabilityOverride) {
+    return capabilityOverride;
+  }
+  return {
+    canShowPhoneSettings: true,
+    effectiveSignupMethod: normalizeSignupMethod(options.signupMethod || selectedSignupMethod || DEFAULT_SIGNUP_METHOD),
+  };
+}
 function isFiveSimProviderSelected() { return getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_FIVE_SIM; }
 function normalizePhoneSmsProviderValue(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
@@ -1064,7 +1082,14 @@ ${extractFunction('updatePhoneVerificationSettingsUI')}
 
 return {
   setExpanded(value) { phoneVerificationSectionExpanded = Boolean(value); },
-  setLatestState: (state) => { latestState = state || {}; },
+  setLatestState: (state) => {
+    latestState = state || {};
+    if (latestState.signupMethod !== undefined) {
+      selectedSignupMethod = normalizeSignupMethod(latestState.signupMethod);
+    }
+  },
+  setCapabilityOverride(value) { capabilityOverride = value; },
+  getSelectedSignupMethod,
   rowPhoneVerificationEnabled,
   rowPhoneVerificationFold,
   rowSignupMethod,
@@ -1311,6 +1336,29 @@ return {
   assert.equal(api.rowMaDaoAutoPickCountry.style.display, 'none');
   assert.equal(api.rowMaDaoReusePhone.style.display, 'none');
   assert.equal(api.rowMaDaoPriceRange.style.display, '');
+
+  api.setExpanded(true);
+  api.inputPhoneVerificationEnabled.checked = true;
+  api.setLatestState({
+    activeFlowId: 'openai',
+    targetId: 'webchat',
+    signupMethod: 'phone',
+    signupPhoneNumber: '66959916439',
+  });
+  api.setCapabilityOverride({
+    canShowPhoneSettings: false,
+    effectiveSignupMethod: 'email',
+    runtimeLocks: { phoneVerificationEnabled: false },
+  });
+  api.updatePhoneVerificationSettingsUI();
+  assert.equal(api.inputPhoneVerificationEnabled.checked, false);
+  assert.equal(api.getSelectedSignupMethod(), 'email');
+  assert.equal(api.rowPhoneVerificationEnabled.style.display, 'none');
+  assert.equal(api.rowPhoneVerificationFold.style.display, 'none');
+  assert.equal(api.rowSignupMethod.style.display, 'none');
+  assert.equal(api.rowSignupPhone.style.display, 'none');
+  assert.equal(api.rowPhoneSmsProvider.style.display, 'none');
+  assert.equal(api.rowHeroSmsPlatform.style.display, 'none');
 });
 
 test('collectSettingsPayload keeps local helper sync enabled while persisting sms toggle state', () => {
@@ -1345,6 +1393,7 @@ let cloudflareTempEmailDomainEditMode = false;
 const selectCfDomain = { value: '' };
 const selectTempEmailDomain = { value: '' };
 const selectPanelMode = { value: 'cpa' };
+let capabilityOverride = null;
 const inputVpsUrl = { value: '' };
 const inputVpsPassword = { value: '' };
 const inputSub2ApiUrl = { value: '' };
@@ -1546,6 +1595,21 @@ function syncHeroSmsFallbackSelectionOrderFromSelect() {
   return [{ id: 52, label: 'Thailand' }, { id: 16, label: 'United Kingdom' }];
 }
 function getSelectedSignupMethod() { return 'phone'; }
+function getSelectedFlowId() { return latestState.activeFlowId || 'openai'; }
+function getSelectedTargetId() { return latestState.targetId || selectPanelMode.value; }
+function resolveCurrentSidepanelCapabilities(options = {}) {
+  if (capabilityOverride) {
+    return capabilityOverride;
+  }
+  return {
+    effectiveTargetId: options.targetId || selectPanelMode.value,
+    effectiveSignupMethod: options.signupMethod || 'phone',
+    runtimeLocks: {
+      plusModeEnabled: false,
+      phoneVerificationEnabled: Boolean(options.state?.phoneVerificationEnabled),
+    },
+  };
+}
 ${extractFunction('normalizePanelMode')}
 ${extractFunction('getSelectedPanelMode')}
 function getSelectedFiveSimCountries() {
@@ -1555,7 +1619,15 @@ function getSelectedNexSmsCountries() {
   return [{ id: 1, label: 'Country #1' }];
 }
 ${extractFunction('collectSettingsPayload')}
-return { collectSettingsPayload };
+return {
+  collectSettingsPayload,
+  setLatestState(state) {
+    latestState = state || {};
+  },
+  setCapabilityOverride(value) {
+    capabilityOverride = value;
+  },
+};
 `)(normalizeIcloudTargetMailboxType, normalizeIcloudForwardMailProvider);
 
   const payload = api.collectSettingsPayload();
@@ -1614,6 +1686,48 @@ return { collectSettingsPayload };
   assert.equal(payload.fiveSimApiKey, 'five-sim-key');
   assert.equal(payload.fiveSimCountryId, 'vietnam');
   assert.equal(payload.fiveSimMinPrice, '0.3333');
+
+  api.setLatestState({
+    activeFlowId: 'openai',
+    targetId: 'webchat',
+    phoneVerificationEnabled: true,
+    signupMethod: 'phone',
+    fiveSimCountryOrder: ['thailand', 'england'],
+    heroSmsMinPrice: '0.0444',
+    fiveSimMinPrice: '0.3333',
+    phoneSmsReuseEnabled: false,
+    heroSmsReuseEnabled: false,
+    freePhoneReuseEnabled: false,
+    freePhoneReuseAutoEnabled: false,
+    phonePreferredActivation: {
+      provider: 'hero-sms',
+      activationId: 'stored-activation',
+      phoneNumber: '66950001111',
+      countryId: 52,
+      countryLabel: 'Thailand',
+      successfulUses: 2,
+      maxUses: 3,
+    },
+  });
+  api.setCapabilityOverride({
+    effectiveTargetId: 'webchat',
+    effectiveSignupMethod: 'email',
+    runtimeLocks: {
+      plusModeEnabled: false,
+      phoneVerificationEnabled: false,
+    },
+  });
+  const webchatPayload = api.collectSettingsPayload();
+  assert.equal(webchatPayload.targetId, 'webchat');
+  assert.equal(webchatPayload.phoneVerificationEnabled, false);
+  assert.equal(webchatPayload.signupMethod, 'email');
+  assert.equal(webchatPayload.phoneSmsProvider, 'hero-sms');
+  assert.deepStrictEqual(webchatPayload.phoneSmsProviderOrder, ['nexsms', '5sim']);
+  assert.equal(webchatPayload.heroSmsApiKey, 'demo-key');
+  assert.equal(webchatPayload.fiveSimApiKey, 'five-sim-key');
+  assert.equal(webchatPayload.nexSmsApiKey, 'nex-key');
+  assert.equal(webchatPayload.madaoHttpSecret, 'madao-secret');
+  assert.equal(webchatPayload.phoneVerificationReplacementLimit, 5);
 });
 
 test('switchPhoneSmsProvider saves API keys independently when the select value has already changed', async () => {

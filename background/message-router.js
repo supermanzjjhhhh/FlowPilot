@@ -219,20 +219,36 @@
     function buildAutoRunFlowStateUpdates(payload = {}) {
       const hasActiveFlowId = Object.prototype.hasOwnProperty.call(payload, 'activeFlowId');
       const hasTargetId = Object.prototype.hasOwnProperty.call(payload, 'targetId');
-      if (!hasActiveFlowId && !hasTargetId) {
+      const hasSignupMethod = Object.prototype.hasOwnProperty.call(payload, 'signupMethod');
+      const hasPhoneVerificationEnabled = Object.prototype.hasOwnProperty.call(payload, 'phoneVerificationEnabled');
+      const hasPlusModeEnabled = Object.prototype.hasOwnProperty.call(payload, 'plusModeEnabled');
+      if (!hasActiveFlowId && !hasTargetId && !hasSignupMethod && !hasPhoneVerificationEnabled && !hasPlusModeEnabled) {
         return {};
       }
       const activeFlowId = normalizeMessageFlowId(payload.activeFlowId, 'openai');
-      const updates = {
-        activeFlowId,
-        flowId: activeFlowId,
-      };
+      const updates = {};
+      if (hasActiveFlowId || hasTargetId) {
+        updates.activeFlowId = activeFlowId;
+        updates.flowId = activeFlowId;
+      }
       if (hasTargetId) {
         updates.targetId = normalizeMessageTargetId(
           activeFlowId,
           payload.targetId,
           activeFlowId === 'kiro' ? 'kiro-rs' : 'cpa'
         );
+      }
+      if (hasSignupMethod) {
+        updates.signupMethod = normalizeSignupMethod(payload.signupMethod);
+      }
+      if (hasPhoneVerificationEnabled) {
+        updates.phoneVerificationEnabled = Boolean(payload.phoneVerificationEnabled);
+      }
+      if (hasPlusModeEnabled) {
+        updates.plusModeEnabled = Boolean(payload.plusModeEnabled);
+      }
+      if (hasSignupMethod || hasPhoneVerificationEnabled || hasPlusModeEnabled || hasTargetId || hasActiveFlowId) {
+        updates.resolvedSignupMethod = null;
       }
       return updates;
     }
@@ -1421,6 +1437,7 @@
           const currentState = await getState();
           const updates = buildPersistentSettingsPayload(message.payload || {});
           const sessionUpdates = buildLuckmailSessionSettingsPayload(message.payload || {});
+          const runtimeStateUpdates = {};
           const modeValidation = validateModeSwitch({
             ...currentState,
             ...updates,
@@ -1444,7 +1461,16 @@
             || Object.prototype.hasOwnProperty.call(updates, 'activeFlowId')
             || Object.prototype.hasOwnProperty.call(updates, 'accountContributionEnabled')
           ) {
-            updates.signupMethod = resolveSignupMethod(nextSignupState);
+            const resolvedSignupMethod = resolveSignupMethod(nextSignupState);
+            const rawFrozenSignupMethod = String(currentState?.resolvedSignupMethod || '').trim().toLowerCase();
+            updates.signupMethod = resolvedSignupMethod;
+            if (
+              rawFrozenSignupMethod === 'phone'
+              || rawFrozenSignupMethod === 'email'
+              || normalizeSignupMethod(currentState?.signupMethod) !== resolvedSignupMethod
+            ) {
+              runtimeStateUpdates.resolvedSignupMethod = null;
+            }
           }
           const nextPersistedSignupMethod = Object.prototype.hasOwnProperty.call(updates, 'signupMethod')
             ? updates.signupMethod
@@ -1473,6 +1499,7 @@
           const stateUpdates = {
             ...canonicalSettingsUpdates,
             ...sessionUpdates,
+            ...runtimeStateUpdates,
           };
           if (Object.prototype.hasOwnProperty.call(canonicalSettingsUpdates, 'activeFlowId')
             && !Object.prototype.hasOwnProperty.call(stateUpdates, 'flowId')) {

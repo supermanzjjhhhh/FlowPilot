@@ -45,7 +45,6 @@
   },
   "baseGroups": [
     "openai-plus",
-    "openai-phone",
     "shared-auto-run",
     "openai-oauth",
     "openai-step6"
@@ -60,6 +59,7 @@
         "localCpaStep9Mode": "submit"
       },
       "groups": [
+        "openai-phone",
         "openai-target-cpa"
       ]
     },
@@ -79,6 +79,7 @@
         "sub2apiDefaultProxyName": ""
       },
       "groups": [
+        "openai-phone",
         "openai-target-sub2api"
       ]
     },
@@ -90,6 +91,7 @@
         "codex2apiAdminKey": ""
       },
       "groups": [
+        "openai-phone",
         "openai-target-codex2api"
       ]
     },
@@ -487,7 +489,8 @@
       ]
     },
     "webchat": {
-      "supportsPhoneSignup": true,
+      "supportsPhoneSignup": false,
+      "supportsPhoneVerificationSettings": false,
       "requiresPhoneSignupWarning": false,
       "supportedPlusAccountAccessStrategies": [
         "oauth"

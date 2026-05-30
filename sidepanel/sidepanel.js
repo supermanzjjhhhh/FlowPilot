@@ -10378,6 +10378,9 @@ function canSelectPhoneSignupMethod() {
         })
         : null;
     })();
+  if (capabilityState && typeof capabilityState.canUsePhoneSignup === 'boolean') {
+    return capabilityState.canUsePhoneSignup;
+  }
   if (capabilityState && typeof capabilityState.canSelectPhoneSignup === 'boolean') {
     return capabilityState.canSelectPhoneSignup;
   }
@@ -10464,7 +10467,7 @@ function updateSignupMethodUI(options = {}) {
 }
 
 function updatePhoneVerificationSettingsUI() {
-  const rawEnabled = Boolean(inputPhoneVerificationEnabled?.checked);
+  let rawEnabled = Boolean(inputPhoneVerificationEnabled?.checked);
   const rawPlusModeEnabled = typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
     ? Boolean(inputPlusModeEnabled.checked)
     : Boolean(latestState?.plusModeEnabled);
@@ -10503,6 +10506,19 @@ function updatePhoneVerificationSettingsUI() {
   const canShowPhoneSettings = capabilityState
     ? Boolean(capabilityState.canShowPhoneSettings)
     : true;
+  if (!canShowPhoneSettings) {
+    if (inputPhoneVerificationEnabled?.checked) {
+      inputPhoneVerificationEnabled.checked = false;
+      rawEnabled = false;
+    }
+    if (
+      typeof getSelectedSignupMethod === 'function'
+      && typeof setSignupMethod === 'function'
+      && getSelectedSignupMethod() === SIGNUP_METHOD_PHONE
+    ) {
+      setSignupMethod(capabilityState?.effectiveSignupMethod || SIGNUP_METHOD_EMAIL);
+    }
+  }
   const enabled = canShowPhoneSettings && rawEnabled;
   const showSettings = enabled && phoneVerificationSectionExpanded;
   const selectedSignupMethodForPhoneSettings = typeof getSelectedSignupMethod === 'function'
@@ -15909,6 +15925,15 @@ async function startAutoRunFromCurrentSettings() {
       totalRuns,
       activeFlowId,
       targetId,
+      signupMethod: typeof getSelectedSignupMethod === 'function'
+        ? getSelectedSignupMethod()
+        : latestState?.signupMethod,
+      phoneVerificationEnabled: typeof inputPhoneVerificationEnabled !== 'undefined' && inputPhoneVerificationEnabled
+        ? Boolean(inputPhoneVerificationEnabled.checked)
+        : Boolean(latestState?.phoneVerificationEnabled),
+      plusModeEnabled: typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
+        ? Boolean(inputPlusModeEnabled.checked)
+        : Boolean(latestState?.plusModeEnabled),
       autoRunSkipFailures,
       accountContributionEnabled: Boolean(latestState?.accountContributionEnabled),
       contributionAdapterId: latestState?.contributionAdapterId || '',

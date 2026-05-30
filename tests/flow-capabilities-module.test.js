@@ -376,6 +376,55 @@ test('flow capability registry validates OpenAI webchat target configuration wit
   assert.equal(configuredState.effectivePlusAccountAccessStrategy, 'oauth');
 });
 
+test('flow capability registry disables phone settings for OpenAI webchat target', () => {
+  const api = loadApi();
+  const registry = api.createFlowCapabilityRegistry();
+
+  const capabilityState = registry.resolveSidepanelCapabilities({
+    state: {
+      activeFlowId: 'openai',
+      targetId: 'webchat',
+      phoneVerificationEnabled: true,
+      signupMethod: 'phone',
+      openaiWebchatUrl: 'https://webchat.example.com/admin',
+      openaiWebchatAdminKey: 'admin-key',
+    },
+  });
+
+  assert.equal(capabilityState.canShowPhoneSettings, false);
+  assert.equal(capabilityState.runtimeLocks.phoneVerificationEnabled, false);
+  assert.equal(capabilityState.canUsePhoneSignup, false);
+  assert.equal(capabilityState.effectiveSignupMethod, 'email');
+  assert.deepEqual(capabilityState.effectiveSignupMethods, ['email']);
+  assert.equal(capabilityState.stepDefinitionOptions.phoneVerificationEnabled, false);
+  assert.equal(capabilityState.stepDefinitionOptions.signupMethod, 'email');
+  assert.equal(capabilityState.stepDefinitionOptions.openaiWebchatUploadEnabled, true);
+  assert.deepEqual(
+    capabilityState.visibleGroupIds,
+    ['openai-plus', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-target-webchat', 'service-account', 'service-email', 'service-proxy']
+  );
+
+  const validation = registry.validateModeSwitch({
+    state: {
+      activeFlowId: 'openai',
+      targetId: 'webchat',
+      phoneVerificationEnabled: true,
+      signupMethod: 'phone',
+      openaiWebchatUrl: 'https://webchat.example.com/admin',
+      openaiWebchatAdminKey: 'admin-key',
+    },
+    changedKeys: ['targetId', 'phoneVerificationEnabled', 'signupMethod'],
+  });
+
+  assert.equal(validation.ok, false);
+  assert.equal(validation.normalizedUpdates.phoneVerificationEnabled, false);
+  assert.equal(validation.normalizedUpdates.signupMethod, 'email');
+  assert.deepEqual(
+    validation.errors.map((entry) => entry.code),
+    ['phone_verification_unsupported', 'phone_signup_panel_unsupported']
+  );
+});
+
 test('flow capability registry ignores hidden OpenAI webchat add-on upload outside webchat target', () => {
   const api = loadApi();
   const registry = api.createFlowCapabilityRegistry();

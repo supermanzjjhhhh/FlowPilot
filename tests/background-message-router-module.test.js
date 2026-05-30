@@ -865,6 +865,7 @@ test('AUTO_RUN applies current flow selection from payload before starting loop'
         activeFlowId: 'kiro',
         flowId: 'kiro',
         targetId: 'kiro-rs',
+        resolvedSignupMethod: null,
       },
     },
     {
@@ -888,6 +889,103 @@ test('AUTO_RUN applies current flow selection from payload before starting loop'
       flowId: 'kiro',
       targetId: 'kiro-rs',
       optionActiveFlowId: 'kiro',
+    },
+  ]);
+});
+
+test('AUTO_RUN applies current phone capability state from sidepanel payload before starting loop', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const calls = [];
+  const validations = [];
+  let state = {
+    activeFlowId: 'openai',
+    flowId: 'openai',
+    targetId: 'cpa',
+    signupMethod: 'phone',
+    resolvedSignupMethod: 'phone',
+    phoneVerificationEnabled: true,
+    plusModeEnabled: false,
+  };
+
+  const router = api.createMessageRouter({
+    clearStopRequest: () => {},
+    getPendingAutoRunTimerPlan: () => null,
+    getState: async () => ({ ...state }),
+    normalizeRunCount: (value) => Number(value) || 1,
+    setState: async (updates) => {
+      calls.push({ type: 'setState', updates: { ...updates } });
+      state = { ...state, ...updates };
+    },
+    startAutoRunLoop: (totalRuns, options) => {
+      calls.push({ type: 'startAutoRunLoop', totalRuns, options });
+    },
+    validateAutoRunStart: (validationState, options = {}) => {
+      validations.push({
+        targetId: validationState?.targetId,
+        signupMethod: validationState?.signupMethod,
+        resolvedSignupMethod: validationState?.resolvedSignupMethod,
+        phoneVerificationEnabled: validationState?.phoneVerificationEnabled,
+        optionTargetId: options?.targetId,
+      });
+      return { ok: true, errors: [] };
+    },
+  });
+
+  const response = await router.handleMessage({
+    type: 'AUTO_RUN',
+    source: 'sidepanel',
+    payload: {
+      totalRuns: 1,
+      activeFlowId: 'openai',
+      targetId: 'webchat',
+      signupMethod: 'email',
+      phoneVerificationEnabled: false,
+      plusModeEnabled: false,
+    },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(state.targetId, 'webchat');
+  assert.equal(state.signupMethod, 'email');
+  assert.equal(state.resolvedSignupMethod, null);
+  assert.equal(state.phoneVerificationEnabled, false);
+  assert.deepStrictEqual(calls, [
+    {
+      type: 'setState',
+      updates: {
+        activeFlowId: 'openai',
+        flowId: 'openai',
+        targetId: 'webchat',
+        signupMethod: 'email',
+        phoneVerificationEnabled: false,
+        plusModeEnabled: false,
+        resolvedSignupMethod: null,
+      },
+    },
+    {
+      type: 'setState',
+      updates: {
+        autoRunSkipFailures: false,
+      },
+    },
+    {
+      type: 'startAutoRunLoop',
+      totalRuns: 1,
+      options: {
+        autoRunSkipFailures: false,
+        mode: 'restart',
+      },
+    },
+  ]);
+  assert.deepStrictEqual(validations, [
+    {
+      targetId: 'webchat',
+      signupMethod: 'email',
+      resolvedSignupMethod: null,
+      phoneVerificationEnabled: false,
+      optionTargetId: 'webchat',
     },
   ]);
 });
@@ -926,6 +1024,80 @@ test('SAVE_SETTING re-resolves signup method when panel mode changes', async () 
   assert.equal(response.ok, true);
   assert.equal(state.targetId, 'cpa');
   assert.equal(state.signupMethod, 'email');
+});
+
+test('SAVE_SETTING clears stale frozen signup method when switching to phone signup', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const persistedPayloads = [];
+  const setStateCalls = [];
+  let state = {
+    activeFlowId: 'openai',
+    flowId: 'openai',
+    targetId: 'cpa',
+    signupMethod: 'email',
+    resolvedSignupMethod: 'email',
+    phoneVerificationEnabled: false,
+    plusModeEnabled: false,
+  };
+
+  const router = api.createMessageRouter({
+    addLog: async () => {},
+    buildLuckmailSessionSettingsPayload: () => ({}),
+    buildPersistentSettingsPayload: (input = {}) => {
+      const updates = {};
+      if (Object.prototype.hasOwnProperty.call(input, 'signupMethod')) {
+        updates.signupMethod = String(input.signupMethod || 'email');
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'phoneVerificationEnabled')) {
+        updates.phoneVerificationEnabled = Boolean(input.phoneVerificationEnabled);
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'plusModeEnabled')) {
+        updates.plusModeEnabled = Boolean(input.plusModeEnabled);
+      }
+      return updates;
+    },
+    broadcastDataUpdate: () => {},
+    getState: async () => ({ ...state }),
+    resolveSignupMethod: (nextState = {}) => (
+      String(nextState.signupMethod || '').trim().toLowerCase() === 'phone'
+        && Boolean(nextState.phoneVerificationEnabled)
+        && !Boolean(nextState.plusModeEnabled)
+        ? 'phone'
+        : 'email'
+    ),
+    setPersistentSettings: async (updates) => {
+      persistedPayloads.push({ ...updates });
+      const { resolvedSignupMethod, ...persistedUpdates } = updates;
+      void resolvedSignupMethod;
+      return { ...persistedUpdates };
+    },
+    setState: async (updates) => {
+      setStateCalls.push({ ...updates });
+      state = { ...state, ...updates };
+    },
+  });
+
+  const response = await router.handleMessage({
+    type: 'SAVE_SETTING',
+    payload: {
+      signupMethod: 'phone',
+      phoneVerificationEnabled: true,
+      plusModeEnabled: false,
+    },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(state.signupMethod, 'phone');
+  assert.equal(state.phoneVerificationEnabled, true);
+  assert.equal(state.resolvedSignupMethod, null);
+  assert.deepEqual(persistedPayloads[0], {
+    signupMethod: 'phone',
+    phoneVerificationEnabled: true,
+    plusModeEnabled: false,
+  });
+  assert.equal(setStateCalls.some((updates) => updates.resolvedSignupMethod === null), true);
 });
 
 test('SAVE_SETTING applies shared mode-switch normalization before persisting incompatible capability flags', async () => {

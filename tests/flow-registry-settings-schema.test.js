@@ -46,11 +46,11 @@ test('flow registry exposes canonical flow and target metadata', () => {
   assert.equal(flowRegistry.normalizeTargetId('grok', 'anything-else'), 'webchat2api');
   assert.deepEqual(
     flowRegistry.getVisibleGroupIds('openai', 'cpa'),
-    ['openai-plus', 'openai-phone', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-target-cpa', 'service-account', 'service-email', 'service-proxy']
+    ['openai-plus', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-phone', 'openai-target-cpa', 'service-account', 'service-email', 'service-proxy']
   );
   assert.deepEqual(
     flowRegistry.getVisibleGroupIds('openai', 'webchat'),
-    ['openai-plus', 'openai-phone', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-target-webchat', 'service-account', 'service-email', 'service-proxy']
+    ['openai-plus', 'shared-auto-run', 'openai-oauth', 'openai-step6', 'openai-target-webchat', 'service-account', 'service-email', 'service-proxy']
   );
   assert.deepEqual(
     flowRegistry.getVisibleGroupIds('kiro', 'kiro-rs'),
@@ -67,6 +67,14 @@ test('flow registry exposes canonical flow and target metadata', () => {
   assert.deepEqual(
     flowRegistry.getTargetOptions('grok').map((entry) => entry.id),
     ['webchat2api']
+  );
+  assert.equal(
+    flowRegistry.getTargetCapabilities('openai', 'webchat')?.supportsPhoneSignup,
+    false
+  );
+  assert.equal(
+    flowRegistry.getTargetCapabilities('openai', 'webchat')?.supportsPhoneVerificationSettings,
+    false
   );
   assert.deepEqual(
     flowRegistry.getSettingsGroupDefinition('openai-plus')?.rowIds,
