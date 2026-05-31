@@ -13940,7 +13940,6 @@ const step2Executor = self.MultiPageBackgroundStep2?.createStep2Executor({
   chrome,
   completeNodeFromBackground,
   ensureContentScriptReadyOnTab,
-  ensureSignupAuthEntryPageReady,
   ensureSignupEntryPageReady,
   ensureSignupPostEmailPageReadyInTab,
   ensureSignupPostIdentityPageReadyInTab: signupFlowHelpers.ensureSignupPostIdentityPageReadyInTab,
@@ -14648,10 +14647,6 @@ async function openSignupEntryTab(step = 1) {
 }
 
 async function ensureSignupEntryPageReady(step = 1) {
-  return signupFlowHelpers.ensureSignupEntryPageReady(step);
-}
-
-async function ensureSignupAuthEntryPageReady(step = 1) {
   return signupFlowHelpers.ensureSignupEntryPageReady(step);
 }
 

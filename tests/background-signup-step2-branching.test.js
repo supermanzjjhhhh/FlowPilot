@@ -324,28 +324,26 @@ test('step 2 submits manual signup phone without acquiring a number', async () =
   ]);
 });
 
-test('step 2 stops with an explicit error instead of silently skipping 3/4/5 on chatgpt home', async () => {
+test('step 2 reopens the generic signup entry once when email submission hits an unavailable entry', async () => {
   const completedPayloads = [];
   const logs = [];
+  const sentPayloads = [];
+  let reopenCalls = 0;
+  let submitAttempts = 0;
 
   const executor = step2Api.createStep2Executor({
     addLog: async (message, level = 'info') => {
       logs.push({ message, level });
     },
-    chrome: {
-      tabs: {
-        update: async () => {},
-        get: async () => ({ url: 'https://chatgpt.com/' }),
-      },
-    },
+    chrome: { tabs: { update: async () => {} } },
     completeNodeFromBackground: async (step, payload) => {
       completedPayloads.push({ step, payload });
     },
     ensureContentScriptReadyOnTab: async () => {},
-    ensureSignupAuthEntryPageReady: async () => {
-      throw new Error('当前页面没有可用的注册入口，也不在邮箱/密码页。URL: https://chatgpt.com/');
+    ensureSignupEntryPageReady: async () => {
+      reopenCalls += 1;
+      return { tabId: 13 };
     },
-    ensureSignupEntryPageReady: async () => ({ tabId: 13 }),
     ensureSignupPostEmailPageReadyInTab: async () => ({
       state: 'password_page',
       url: 'https://auth.openai.com/create-account/password',
@@ -353,55 +351,151 @@ test('step 2 stops with an explicit error instead of silently skipping 3/4/5 on 
     getTabId: async () => 13,
     isTabAlive: async () => true,
     resolveSignupEmailForFlow: async () => 'user@example.com',
-    sendToContentScriptResilient: async () => ({ submitted: true }),
+    sendToContentScriptResilient: async (_source, message) => {
+      assert.equal(message.type, 'EXECUTE_NODE');
+      submitAttempts += 1;
+      sentPayloads.push(message.payload);
+      if (submitAttempts === 1) {
+        return { error: '当前页面没有可用的注册入口，也不在邮箱/密码页。URL: https://chatgpt.com/auth/login' };
+      }
+      return { submitted: true };
+    },
     OPENAI_AUTH_INJECT_FILES: [],
   });
 
-  await assert.rejects(
-    () => executor.executeStep2({ email: 'user@example.com' }),
-    /3\/4\/5/
-  );
+  await executor.executeStep2({ email: 'user@example.com' });
 
-  assert.deepStrictEqual(completedPayloads, []);
-  assert.ok(logs.some((item) => /3\/4\/5/.test(item.message)));
-});
-
-test('step 2 does not force auth-entry retry on logged-out chatgpt home when content reports entry_home', async () => {
-  const completedPayloads = [];
-  const logs = [];
-  const sentPayloads = [];
-  let authEntryCalls = 0;
-
-  const executor = step2Api.createStep2Executor({
-    addLog: async (message, level = 'info') => {
-      logs.push({ message, level });
-    },
-    chrome: {
-      tabs: {
-        update: async () => {},
-        get: async () => ({ url: 'https://chatgpt.com/' }),
+  assert.equal(reopenCalls, 1);
+  assert.equal(submitAttempts, 2);
+  assert.deepStrictEqual(sentPayloads, [
+    { email: 'user@example.com' },
+    { email: 'user@example.com' },
+  ]);
+  assert.equal(logs.some((item) => /重新打开官网入口后重试一次/.test(item.message)), true);
+  assert.deepStrictEqual(completedPayloads, [
+    {
+      step: 'submit-signup-email',
+      payload: {
+        email: 'user@example.com',
+        accountIdentifierType: 'email',
+        accountIdentifier: 'user@example.com',
+        nextSignupState: 'password_page',
+        nextSignupUrl: 'https://auth.openai.com/create-account/password',
+        skippedPasswordStep: false,
       },
     },
+  ]);
+});
+
+test('step 2 reopens the generic signup entry once when phone submission hits an unavailable entry', async () => {
+  const completedPayloads = [];
+  const sentPayloads = [];
+  let reopenCalls = 0;
+  let phoneEntryReadyCalls = 0;
+  const activation = {
+    activationId: 'signup-activation-retry',
+    phoneNumber: '66959916439',
+    countryId: 52,
+    countryLabel: 'Thailand',
+  };
+
+  const executor = step2Api.createStep2Executor({
+    addLog: async () => {},
+    chrome: { tabs: { update: async () => {} } },
     completeNodeFromBackground: async (step, payload) => {
       completedPayloads.push({ step, payload });
     },
     ensureContentScriptReadyOnTab: async () => {},
-    ensureSignupAuthEntryPageReady: async () => {
-      authEntryCalls += 1;
+    ensureSignupEntryPageReady: async () => {
+      reopenCalls += 1;
       return { tabId: 15 };
     },
-    ensureSignupEntryPageReady: async () => ({ tabId: 15 }),
+    ensureSignupPostIdentityPageReadyInTab: async () => ({
+      state: 'phone_verification_page',
+      url: 'https://auth.openai.com/phone-verification',
+    }),
+    getTabId: async () => 15,
+    isTabAlive: async () => true,
+    phoneVerificationHelpers: {
+      prepareSignupPhoneActivation: async () => activation,
+    },
+    resolveSignupMethod: () => 'phone',
+    resolveSignupEmailForFlow: async () => {
+      throw new Error('email resolver should not run for phone signup');
+    },
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'ENSURE_SIGNUP_PHONE_ENTRY_READY') {
+        phoneEntryReadyCalls += 1;
+        return { ready: true, state: 'phone_entry', url: 'https://chatgpt.com/' };
+      }
+      sentPayloads.push(message.payload);
+      if (sentPayloads.length === 1) {
+        return { error: '当前页面没有可用的手机号注册入口，也不在密码页。URL: https://chatgpt.com/auth/login' };
+      }
+      return { submitted: true };
+    },
+    OPENAI_AUTH_INJECT_FILES: [],
+  });
+
+  await executor.executeStep2({ signupMethod: 'phone' });
+
+  assert.equal(reopenCalls, 1);
+  assert.equal(phoneEntryReadyCalls, 2);
+  assert.deepStrictEqual(sentPayloads, [
+    {
+      signupMethod: 'phone',
+      phoneNumber: '66959916439',
+      countryId: 52,
+      countryLabel: 'Thailand',
+    },
+    {
+      signupMethod: 'phone',
+      phoneNumber: '66959916439',
+      countryId: 52,
+      countryLabel: 'Thailand',
+    },
+  ]);
+  assert.deepStrictEqual(completedPayloads, [
+    {
+      step: 'submit-signup-email',
+      payload: {
+        accountIdentifierType: 'phone',
+        accountIdentifier: '66959916439',
+        signupPhoneNumber: '66959916439',
+        signupPhoneActivation: activation,
+        nextSignupState: 'phone_verification_page',
+        nextSignupUrl: 'https://auth.openai.com/phone-verification',
+        skippedPasswordStep: true,
+      },
+    },
+  ]);
+});
+
+test('step 2 submits directly on an existing signup tab without reopening the entry page', async () => {
+  const completedPayloads = [];
+  const sentPayloads = [];
+  let reopenCalls = 0;
+
+  const executor = step2Api.createStep2Executor({
+    addLog: async () => {},
+    chrome: { tabs: { update: async () => {} } },
+    completeNodeFromBackground: async (step, payload) => {
+      completedPayloads.push({ step, payload });
+    },
+    ensureContentScriptReadyOnTab: async () => {},
+    ensureSignupEntryPageReady: async () => {
+      reopenCalls += 1;
+      return { tabId: 16 };
+    },
     ensureSignupPostEmailPageReadyInTab: async () => ({
       state: 'password_page',
       url: 'https://auth.openai.com/create-account/password',
     }),
-    getTabId: async () => 15,
+    getTabId: async () => 16,
     isTabAlive: async () => true,
     resolveSignupEmailForFlow: async () => 'user@example.com',
     sendToContentScriptResilient: async (_source, message) => {
-      if (message.type === 'ENSURE_SIGNUP_ENTRY_READY') {
-        return { ready: true, state: 'entry_home', url: 'https://chatgpt.com/' };
-      }
+      assert.equal(message.type, 'EXECUTE_NODE');
       sentPayloads.push(message.payload);
       return { submitted: true };
     },
@@ -410,7 +504,7 @@ test('step 2 does not force auth-entry retry on logged-out chatgpt home when con
 
   await executor.executeStep2({ email: 'user@example.com' });
 
-  assert.equal(authEntryCalls, 0);
+  assert.equal(reopenCalls, 0);
   assert.deepStrictEqual(sentPayloads, [{ email: 'user@example.com' }]);
   assert.deepStrictEqual(completedPayloads, [
     {
@@ -425,10 +519,9 @@ test('step 2 does not force auth-entry retry on logged-out chatgpt home when con
       },
     },
   ]);
-  assert.equal(logs.some((item) => /已登录 ChatGPT 首页/.test(item.message)), false);
 });
 
-test('step 2 waits for the existing signup tab to settle before probing the entry state', async () => {
+test('step 2 waits for the existing signup tab to settle before submitting email', async () => {
   const completedPayloads = [];
   const logs = [];
   const events = [];
@@ -456,7 +549,6 @@ test('step 2 waits for the existing signup tab to settle before probing the entr
     ensureContentScriptReadyOnTab: async () => {
       events.push('content-ready');
     },
-    ensureSignupAuthEntryPageReady: async () => ({ tabId: 17 }),
     ensureSignupEntryPageReady: async () => ({ tabId: 17 }),
     ensureSignupPostEmailPageReadyInTab: async () => ({
       state: 'password_page',
@@ -467,9 +559,6 @@ test('step 2 waits for the existing signup tab to settle before probing the entr
     resolveSignupEmailForFlow: async () => 'user@example.com',
     sendToContentScriptResilient: async (_source, message) => {
       events.push(message.type);
-      if (message.type === 'ENSURE_SIGNUP_ENTRY_READY') {
-        return { ready: true, state: 'entry_home', url: 'https://chatgpt.com/' };
-      }
       return { submitted: true };
     },
     OPENAI_AUTH_INJECT_FILES: [],
@@ -493,7 +582,7 @@ test('step 2 waits for the existing signup tab to settle before probing the entr
       },
     },
     'content-ready',
-    'ENSURE_SIGNUP_ENTRY_READY',
+    'EXECUTE_NODE',
   ]);
   assert.equal(logs.some((item) => /额外稳定 3 秒/.test(item.message)), true);
   assert.equal(logs.some((item) => item.meta.step === 2 && item.meta.stepKey === 'signup-entry'), true);
