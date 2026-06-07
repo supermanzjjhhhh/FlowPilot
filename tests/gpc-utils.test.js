@@ -15,8 +15,30 @@ test('GPC utils keeps supported Plus payment methods distinct and normalizes leg
   assert.equal(api.normalizePlusPaymentMethod('none'), 'none');
   assert.equal(api.normalizePlusPaymentMethod('no-payment'), 'none');
   assert.equal(api.normalizePlusPaymentMethod('gpc-helper'), 'gpc-helper');
+  assert.equal(api.normalizePlusPaymentMethod('plus-auto'), 'plus-auto');
+  assert.equal(api.normalizePlusPaymentMethod('pix'), 'plus-auto');
+  assert.equal(api.normalizePlusPaymentMethod('pixplus'), 'plus-auto');
   assert.equal(api.normalizePlusPaymentMethod('gopay'), 'paypal');
   assert.equal(api.normalizePlusPaymentMethod('unknown'), 'paypal');
+});
+
+test('GPC utils normalizes Auto base URL and cdk, and builds Auto API URLs', () => {
+  const api = loadGpcUtils();
+  assert.equal(api.DEFAULT_AUTO_BASE_URL, 'https://auto.1iiu.com');
+  assert.equal(api.PLUS_PAYMENT_METHOD_AUTO, 'plus-auto');
+  assert.equal(api.normalizeAutoBaseUrl(''), 'https://auto.1iiu.com');
+  assert.equal(api.normalizeAutoBaseUrl('https://auto.1iiu.com/'), 'https://auto.1iiu.com');
+  assert.equal(api.normalizeAutoBaseUrl('not a url'), 'https://auto.1iiu.com');
+  assert.equal(api.normalizeAutoBaseUrl('https://custom.example.com/base/'), 'https://custom.example.com/base');
+  assert.equal(api.normalizeAutoCdk(' QZ-aB12-Cd34-Ef56 '), 'QZ-aB12-Cd34-Ef56');
+  assert.equal(
+    api.buildAutoApiUrl('https://auto.1iiu.com', '/api/v1/redeem'),
+    'https://auto.1iiu.com/api/v1/redeem'
+  );
+  assert.equal(
+    api.buildAutoApiUrl('', 'api/v1/orders/12'),
+    'https://auto.1iiu.com/api/v1/orders/12'
+  );
 });
 
 test('GPC utils builds card balance URLs from portal endpoints', () => {

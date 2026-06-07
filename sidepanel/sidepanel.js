@@ -219,6 +219,7 @@ const inputPlusModeEnabled = document.getElementById('input-plus-mode-enabled');
 const rowPlusPaymentMethod = document.getElementById('row-plus-payment-method');
 const selectPlusPaymentMethod = document.getElementById('select-plus-payment-method');
 const btnGpcCardKeyPurchase = document.getElementById('btn-gpc-card-key-purchase');
+const btnAutoCdkPurchase = document.getElementById('btn-auto-cdk-purchase');
 const plusPaymentMethodCaption = document.getElementById('plus-payment-method-caption');
 const rowPlusAccountAccessStrategy = document.getElementById('row-plus-account-access-strategy');
 const selectPlusAccountAccessStrategy = document.getElementById('select-plus-account-access-strategy');
@@ -240,6 +241,8 @@ const rowGpcCardKey = document.getElementById('row-gpc-card-key');
 const inputGpcCardKey = document.getElementById('input-gpc-card-key');
 const displayGpcCardKeyStatus = document.getElementById('display-gpc-card-key-status');
 const btnGpcCardKeyQuery = document.getElementById('btn-gpc-card-key-query');
+const rowAutoCdk = document.getElementById('row-auto-cdk');
+const inputAutoCdk = document.getElementById('input-auto-cdk');
 const selectMailProvider = document.getElementById('select-mail-provider');
 const btnMailLogin = document.getElementById('btn-mail-login');
 const rowCustomMailReceiveMode = document.getElementById('row-custom-mail-receive-mode');
@@ -465,6 +468,8 @@ const rowMaDaoOperator = document.getElementById('row-madao-operator');
 const rowMaDaoAutoPickCountry = document.getElementById('row-madao-auto-pick-country');
 const rowMaDaoReusePhone = document.getElementById('row-madao-reuse-phone');
 const rowMaDaoPriceRange = document.getElementById('row-madao-price-range');
+const rowCustomUrlSmsPool = document.getElementById('row-custom-url-sms-pool');
+const inputCustomUrlSmsPool = document.getElementById('input-custom-url-sms-pool');
 const rowHeroSmsRuntimePair = document.getElementById('row-hero-sms-runtime-pair');
 const rowHeroSmsCurrentNumber = document.getElementById('row-hero-sms-current-number');
 const rowHeroSmsCurrentCountdown = document.getElementById('row-hero-sms-current-countdown');
@@ -590,9 +595,10 @@ const PLUS_PAYMENT_METHOD_PAYPAL = 'paypal';
 const PLUS_PAYMENT_METHOD_PAYPAL_HOSTED = 'paypal-hosted';
 const PLUS_PAYMENT_METHOD_NONE = 'none';
 const PLUS_PAYMENT_METHOD_GPC_HELPER = 'gpc-helper';
+const PLUS_PAYMENT_METHOD_AUTO = 'plus-auto';
 const DEFAULT_GPC_BASE_URL = 'https://gpc.qlhazycoder.top';
 const DEFAULT_PLUS_HOSTED_CHECKOUT_OAUTH_DELAY_SECONDS = 3;
-const DEFAULT_PLUS_PAYMENT_METHOD = PLUS_PAYMENT_METHOD_GPC_HELPER;
+const DEFAULT_PLUS_PAYMENT_METHOD = PLUS_PAYMENT_METHOD_AUTO;
 const PLUS_ACCOUNT_ACCESS_STRATEGY_OAUTH = 'oauth';
 const PLUS_ACCOUNT_ACCESS_STRATEGY_SUB2API_CODEX_SESSION = 'sub2api_codex_session';
 const PLUS_ACCOUNT_ACCESS_STRATEGY_CPA_CODEX_SESSION = 'cpa_codex_session';
@@ -684,6 +690,7 @@ const PHONE_SMS_PROVIDER_FIVE_SIM = '5sim';
 const PHONE_SMS_PROVIDER_HERO_SMS = PHONE_SMS_PROVIDER_HERO;
 const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
 const PHONE_SMS_PROVIDER_MADAO = 'madao';
+const PHONE_SMS_PROVIDER_CUSTOM_URL = 'custom-url';
 const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO;
 const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
   PHONE_SMS_PROVIDER_HERO,
@@ -769,6 +776,15 @@ const PHONE_SMS_PROVIDER_UI_DESCRIPTORS = Object.freeze({
       'rowMaDaoPriceRange',
     ]),
   }),
+  [PHONE_SMS_PROVIDER_CUSTOM_URL]: Object.freeze({
+    supportsReusableActivation: false,
+    supportsManualFreeReuse: false,
+    supportsFreeReusePreservation: false,
+    supportsAutomaticFreeReuse: false,
+    rowKeys: Object.freeze([
+      'rowCustomUrlSmsPool',
+    ]),
+  }),
 });
 const HERO_SMS_COUNTRY_SELECTION_MAX = 3;
 
@@ -813,6 +829,7 @@ function getPhoneSmsProviderUiRowMap() {
     rowMaDaoAutoPickCountry,
     rowMaDaoReusePhone,
     rowMaDaoPriceRange,
+    rowCustomUrlSmsPool,
     rowPhoneSmsPreferredPriceControl,
     rowPhoneSmsReuseControl,
   };
@@ -3438,6 +3455,7 @@ function normalizePlusPaymentMethod(value = '') {
   }
 
   const gpcValue = typeof PLUS_PAYMENT_METHOD_GPC_HELPER !== 'undefined' ? PLUS_PAYMENT_METHOD_GPC_HELPER : 'gpc-helper';
+  const autoValue = typeof PLUS_PAYMENT_METHOD_AUTO !== 'undefined' ? PLUS_PAYMENT_METHOD_AUTO : 'plus-auto';
   const paypalValue = typeof PLUS_PAYMENT_METHOD_PAYPAL !== 'undefined' ? PLUS_PAYMENT_METHOD_PAYPAL : 'paypal';
   const paypalHostedValue = typeof PLUS_PAYMENT_METHOD_PAYPAL_HOSTED !== 'undefined' ? PLUS_PAYMENT_METHOD_PAYPAL_HOSTED : 'paypal-hosted';
   const noneValue = typeof PLUS_PAYMENT_METHOD_NONE !== 'undefined' ? PLUS_PAYMENT_METHOD_NONE : 'none';
@@ -3450,6 +3468,9 @@ function normalizePlusPaymentMethod(value = '') {
   }
   if (normalized === gpcValue) {
     return gpcValue;
+  }
+  if (normalized === autoValue || normalized === 'pix' || normalized === 'pix_plus' || normalized === 'pixplus') {
+    return autoValue;
   }
   return paypalValue;
 }
@@ -4668,6 +4689,9 @@ function collectSettingsPayload() {
   const nexSmsApiKeyValue = typeof inputNexSmsApiKey !== 'undefined' && inputNexSmsApiKey
     ? String(inputNexSmsApiKey.value || '')
     : String(latestState?.nexSmsApiKey || '');
+  const customUrlSmsPoolValue = typeof inputCustomUrlSmsPool !== 'undefined' && inputCustomUrlSmsPool
+    ? String(inputCustomUrlSmsPool.value || '')
+    : String(latestState?.customUrlSmsPool || '');
   const maDaoBaseUrlValue = typeof inputMaDaoBaseUrl !== 'undefined' && inputMaDaoBaseUrl
     ? normalizeMaDaoBaseUrlSafe(inputMaDaoBaseUrl.value || latestState?.madaoBaseUrl)
     : normalizeMaDaoBaseUrlSafe(latestState?.madaoBaseUrl);
@@ -5241,6 +5265,9 @@ function collectSettingsPayload() {
     gpcCardKey: typeof inputGpcCardKey !== 'undefined' && inputGpcCardKey
       ? normalizeGpcCardKeyInput(inputGpcCardKey.value || '')
       : normalizeGpcCardKeyInput(latestState?.gpcCardKey || ''),
+    autoCdk: typeof inputAutoCdk !== 'undefined' && inputAutoCdk
+      ? String(inputAutoCdk.value || '').trim()
+      : String(latestState?.autoCdk || '').trim(),
     ...(accountContributionEnabled ? {} : {
       customPassword: inputPassword.value,
     }),
@@ -5336,6 +5363,7 @@ function collectSettingsPayload() {
     nexSmsApiKey: nexSmsApiKeyValue,
     nexSmsCountryOrder: nexSmsCountryOrderValue,
     nexSmsServiceCode: nexSmsServiceCodeValue,
+    customUrlSmsPool: customUrlSmsPoolValue,
     madaoBaseUrl: maDaoBaseUrlValue,
     madaoHttpSecret: maDaoHttpSecretValue,
     madaoMode: maDaoModeValue,
@@ -10806,6 +10834,7 @@ function updatePlusModeUI() {
   const noneValue = typeof PLUS_PAYMENT_METHOD_NONE !== 'undefined' ? PLUS_PAYMENT_METHOD_NONE : 'none';
 
   const gpcValue = typeof PLUS_PAYMENT_METHOD_GPC_HELPER !== 'undefined' ? PLUS_PAYMENT_METHOD_GPC_HELPER : 'gpc-helper';
+  const autoValue = typeof PLUS_PAYMENT_METHOD_AUTO !== 'undefined' ? PLUS_PAYMENT_METHOD_AUTO : 'plus-auto';
   const oauthStrategyValue = typeof PLUS_ACCOUNT_ACCESS_STRATEGY_OAUTH !== 'undefined'
     ? PLUS_ACCOUNT_ACCESS_STRATEGY_OAUTH
     : 'oauth';
@@ -10922,6 +10951,7 @@ function updatePlusModeUI() {
     : method;
   const hostedRowsVisible = enabled && selectedMethod === paypalHostedValue;
   const gpcRowsVisible = enabled && selectedMethod === gpcValue;
+  const autoRowsVisible = enabled && selectedMethod === autoValue;
   if (typeof rowPlusMode !== 'undefined' && rowPlusMode) {
     rowPlusMode.style.display = supportsPlusMode ? '' : 'none';
   }
@@ -10935,6 +10965,8 @@ function updatePlusModeUI() {
     plusPaymentMethodCaption.textContent = method === gpcValue
       ? 'GPC 网页充值链路'
 
+      : method === autoValue
+      ? ''
       : method === noneValue
       ? '已有 Plus，无需配置支付链路'
       : method === paypalHostedValue
@@ -11049,6 +11081,12 @@ function updatePlusModeUI() {
   }
   if (typeof btnGpcCardKeyPurchase !== 'undefined' && btnGpcCardKeyPurchase) {
     btnGpcCardKeyPurchase.style.display = gpcRowsVisible ? '' : 'none';
+  }
+  if (typeof rowAutoCdk !== 'undefined' && rowAutoCdk) {
+    rowAutoCdk.style.display = autoRowsVisible ? '' : 'none';
+  }
+  if (typeof btnAutoCdkPurchase !== 'undefined' && btnAutoCdkPurchase) {
+    btnAutoCdkPurchase.style.display = autoRowsVisible ? '' : 'none';
   }
 
 }
@@ -11961,6 +11999,9 @@ function applySettingsState(state) {
       setGpcCardKeyStatus(inputGpcCardKey.value ? '等待检测' : '等待输入', '');
     }
   }
+  if (typeof inputAutoCdk !== 'undefined' && inputAutoCdk) {
+    inputAutoCdk.value = state?.autoCdk || '';
+  }
   if (typeof inputHostedCheckoutVerificationUrl !== 'undefined' && inputHostedCheckoutVerificationUrl) {
     inputHostedCheckoutVerificationUrl.value = String(state?.hostedCheckoutVerificationUrl || '').trim();
   }
@@ -12321,6 +12362,9 @@ function applySettingsState(state) {
     inputNexSmsServiceCode.value = typeof normalizeNexSmsServiceCodeValue === 'function'
       ? normalizeNexSmsServiceCodeValue(state?.nexSmsServiceCode || defaultNexSmsServiceCode)
       : String(state?.nexSmsServiceCode || defaultNexSmsServiceCode).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || defaultNexSmsServiceCode;
+  }
+  if (typeof inputCustomUrlSmsPool !== 'undefined' && inputCustomUrlSmsPool) {
+    inputCustomUrlSmsPool.value = String(state?.customUrlSmsPool || '');
   }
   if (typeof inputMaDaoBaseUrl !== 'undefined' && inputMaDaoBaseUrl) {
     inputMaDaoBaseUrl.value = normalizeMaDaoBaseUrlValue(state?.madaoBaseUrl);
@@ -16277,6 +16321,13 @@ inputPassword.addEventListener('blur', () => {
 });
 
 inputPlusModeEnabled?.addEventListener('change', () => {
+  // 每次开启 Plus 模式时，支付方式强制重置为默认值（不沿用上次选择）。
+  if (inputPlusModeEnabled.checked
+    && typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod
+    && typeof DEFAULT_PLUS_PAYMENT_METHOD !== 'undefined') {
+    selectPlusPaymentMethod.value = DEFAULT_PLUS_PAYMENT_METHOD;
+    currentPlusPaymentMethod = DEFAULT_PLUS_PAYMENT_METHOD;
+  }
   updatePlusModeUI();
   updateSignupMethodUI({ notify: true });
   const stepDefinitionState = typeof resolveStepDefinitionCapabilityState === 'function'
@@ -16301,6 +16352,10 @@ inputPlusModeEnabled?.addEventListener('change', () => {
 
 btnGpcCardKeyPurchase?.addEventListener('click', () => {
   openExternalUrl('https://pay.ldxp.cn/shop/gpc');
+});
+
+btnAutoCdkPurchase?.addEventListener('click', () => {
+  openExternalUrl('https://shop.qlhazycoder.top/');
 });
 
 btnOpenTargetRepository?.addEventListener('click', () => {
@@ -16378,6 +16433,7 @@ selectPlusPaymentMethod?.addEventListener('change', () => {
   inputHostedCheckoutVerificationUrl,
   inputHostedCheckoutPhone,
   inputPlusHostedCheckoutOauthDelaySeconds,
+  inputAutoCdk,
 ].forEach((input) => {
   input?.addEventListener('input', () => {
     markSettingsDirty(true);
@@ -17678,6 +17734,17 @@ function buildPhoneSmsProviderStatePatch(provider = getSelectedPhoneSmsProvider(
     };
   }
 
+  const customUrlProviderValue = typeof PHONE_SMS_PROVIDER_CUSTOM_URL !== 'undefined'
+    ? PHONE_SMS_PROVIDER_CUSTOM_URL
+    : 'custom-url';
+  if (normalizedProvider === customUrlProviderValue) {
+    return {
+      customUrlSmsPool: typeof inputCustomUrlSmsPool !== 'undefined' && inputCustomUrlSmsPool
+        ? String(inputCustomUrlSmsPool.value || '')
+        : String(latestState?.customUrlSmsPool || ''),
+    };
+  }
+
   const currentSelection = typeof getPhoneSmsCountrySelectionForProvider === 'function'
     ? getPhoneSmsCountrySelectionForProvider(PHONE_SMS_PROVIDER_HERO_SMS, { ensureDefault: true })
     : [];
@@ -17985,6 +18052,14 @@ inputNexSmsApiKey?.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputNexSmsApiKey?.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputCustomUrlSmsPool?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputCustomUrlSmsPool?.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
@@ -18959,6 +19034,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message.payload.gpcCardKey !== undefined && inputGpcCardKey) {
         inputGpcCardKey.value = message.payload.gpcCardKey || '';
+      }
+      if (message.payload.autoCdk !== undefined && typeof inputAutoCdk !== 'undefined' && inputAutoCdk) {
+        inputAutoCdk.value = message.payload.autoCdk || '';
       }
       if (
         message.payload.gpcBalance !== undefined

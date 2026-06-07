@@ -23,6 +23,7 @@ importScripts(
   'phone-sms/providers/five-sim.js',
   'phone-sms/providers/nexsms.js',
   'phone-sms/providers/madao.js',
+  'phone-sms/providers/custom-url.js',
   'phone-sms/providers/registry.js',
   'background/phone-verification-flow.js',
   'background/account-run-history.js',
@@ -728,7 +729,11 @@ const PLUS_PAYMENT_METHOD_PAYPAL = 'paypal';
 const PLUS_PAYMENT_METHOD_PAYPAL_HOSTED = 'paypal-hosted';
 const PLUS_PAYMENT_METHOD_NONE = 'none';
 const PLUS_PAYMENT_METHOD_GPC_HELPER = 'gpc-helper';
-const DEFAULT_PLUS_PAYMENT_METHOD = PLUS_PAYMENT_METHOD_GPC_HELPER;
+const PLUS_PAYMENT_METHOD_AUTO = 'plus-auto';
+const DEFAULT_PLUS_PAYMENT_METHOD = PLUS_PAYMENT_METHOD_AUTO;
+const DEFAULT_AUTO_BASE_URL = (typeof self !== 'undefined' && self.GpcUtils?.DEFAULT_AUTO_BASE_URL)
+  || 'https://auto.1iiu.com';
+const DEFAULT_AUTO_TIMEOUT_SECONDS = 900;
 const DEFAULT_PLUS_HOSTED_CHECKOUT_OAUTH_DELAY_SECONDS = 3;
 const DISPLAY_TIMEZONE = 'Asia/Shanghai';
 const MICROSOFT_TOKEN_DNR_RULE_ID = 1001;
@@ -841,6 +846,10 @@ function normalizePlusPaymentMethod(value = '') {
   }
   if (normalized === PLUS_PAYMENT_METHOD_GPC_HELPER) {
     return PLUS_PAYMENT_METHOD_GPC_HELPER;
+  }
+  const autoValue = typeof PLUS_PAYMENT_METHOD_AUTO !== 'undefined' ? PLUS_PAYMENT_METHOD_AUTO : 'plus-auto';
+  if (normalized === autoValue || normalized === 'pix' || normalized === 'pix_plus' || normalized === 'pixplus') {
+    return autoValue;
   }
   return PLUS_PAYMENT_METHOD_PAYPAL;
 }
@@ -1319,6 +1328,12 @@ const PERSISTED_SETTING_DEFAULTS = {
   gpcCardStatus: '',
   gpcPageStatus: '',
   gpcPageStatusText: '',
+  autoCdk: '',
+  autoTimeoutSeconds: DEFAULT_AUTO_TIMEOUT_SECONDS,
+  autoOrderId: '',
+  autoJobId: '',
+  autoOrderState: '',
+  autoPaymentStatus: '',
   autoRunSkipFailures: false,
   autoRunFallbackThreadIntervalMinutes: 0,
   operationDelayEnabled: true,
@@ -1429,6 +1444,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   madaoReusePhone: true,
   madaoMinPrice: '',
   madaoMaxPrice: '',
+  customUrlSmsPool: '',
+  customUrlSmsPoolCursor: 0,
   phonePreferredActivation: null,
 };
 
@@ -2052,6 +2069,10 @@ function normalizePlusPaymentMethod(value = '') {
   }
   if (normalized === PLUS_PAYMENT_METHOD_GPC_HELPER) {
     return PLUS_PAYMENT_METHOD_GPC_HELPER;
+  }
+  if (typeof PLUS_PAYMENT_METHOD_AUTO !== 'undefined'
+    && (normalized === PLUS_PAYMENT_METHOD_AUTO || normalized === 'pix' || normalized === 'pix_plus' || normalized === 'pixplus')) {
+    return PLUS_PAYMENT_METHOD_AUTO;
   }
   return PLUS_PAYMENT_METHOD_PAYPAL;
 }
@@ -3373,6 +3394,21 @@ function normalizePersistentSettingValue(key, value) {
     case 'gpcBalanceUpdatedAt':
     case 'gpcRemainingUses':
       return Math.max(0, Number(value) || 0);
+    case 'autoCdk':
+      return self.GpcUtils?.normalizeAutoCdk
+        ? self.GpcUtils.normalizeAutoCdk(value)
+        : String(value || '').trim();
+    case 'autoTimeoutSeconds': {
+      const numeric = Math.floor(Number(value));
+      return Number.isFinite(numeric) && numeric > 0
+        ? Math.min(3600, Math.max(30, numeric))
+        : DEFAULT_AUTO_TIMEOUT_SECONDS;
+    }
+    case 'autoOrderId':
+    case 'autoJobId':
+    case 'autoOrderState':
+    case 'autoPaymentStatus':
+      return String(value || '').trim();
     case 'autoRunSkipFailures':
       return Boolean(value);
     case 'operationDelayEnabled':
@@ -3580,6 +3616,12 @@ function normalizePersistentSettingValue(key, value) {
     case 'madaoMinPrice':
     case 'madaoMaxPrice':
       return normalizeMaDaoPrice(value);
+    case 'customUrlSmsPool':
+      return String(value || '');
+    case 'customUrlSmsPoolCursor': {
+      const cursor = Math.floor(Number(value));
+      return Number.isFinite(cursor) && cursor > 0 ? cursor : 0;
+    }
     case 'phonePreferredActivation':
       return normalizePhonePreferredActivation(value);
     default:

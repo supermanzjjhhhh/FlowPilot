@@ -115,7 +115,7 @@
     },
     "plus": {
       "plusModeEnabled": false,
-      "plusPaymentMethod": "paypal-hosted",
+      "plusPaymentMethod": "plus-auto",
       "plusAccountAccessStrategy": "oauth",
       "hostedCheckoutVerificationUrl": "",
       "hostedCheckoutPhoneNumber": "",

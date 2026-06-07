@@ -689,6 +689,9 @@
       if (normalized === 'gpc-helper') {
         return 'gpc-helper';
       }
+      if (normalized === 'plus-auto' || normalized === 'pix' || normalized === 'pix_plus' || normalized === 'pixplus') {
+        return 'plus-auto';
+      }
       return 'paypal';
     }
 
@@ -702,6 +705,9 @@
       }
       if (method === 'gpc-helper') {
         return 'GPC';
+      }
+      if (method === 'plus-auto') {
+        return 'Plus 自动充值';
       }
       return 'PayPal';
     }
