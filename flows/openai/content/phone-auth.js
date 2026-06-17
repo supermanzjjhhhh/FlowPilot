@@ -394,6 +394,53 @@
       return selectedCountryMatchesPhoneNumber(phoneNumber);
     }
 
+    function getAddPhoneChannelInput() {
+      const form = getAddPhoneForm();
+      if (!form) return null;
+      return form.querySelector('input[type="hidden"][name="channel"]');
+    }
+
+    function getSelectedChannel() {
+      const channelInput = getAddPhoneChannelInput();
+      if (channelInput) {
+        return String(channelInput.value || '').trim().toLowerCase();
+      }
+      const radio = document.querySelector('input[type="radio"][name^="segmented-control"]:checked');
+      return String(radio?.value || '').trim().toLowerCase();
+    }
+
+    function getSmsChannelRadio() {
+      const form = getAddPhoneForm();
+      if (!form) return null;
+      return form.querySelector('input[type="radio"][value="sms"]');
+    }
+
+    function getWhatsAppChannelRadio() {
+      const form = getAddPhoneForm();
+      if (!form) return null;
+      return form.querySelector('input[type="radio"][value="whatsapp"]');
+    }
+
+    async function ensureSmsChannelSelected() {
+      const channelRadio = getSmsChannelRadio();
+      if (!channelRadio) {
+        return true;
+      }
+      const currentChannel = getSelectedChannel();
+      if (currentChannel === 'sms') {
+        return true;
+      }
+      const label = channelRadio.closest('label');
+      if (!label) {
+        return currentChannel === 'sms';
+      }
+      await performOperationWithDelay({ stepKey: 'phone-auth', kind: 'click', label: 'channel-select-sms' }, async () => {
+        simulateClick(label);
+      });
+      await sleep(250);
+      return getSelectedChannel() === 'sms';
+    }
+
     function getAddPhoneSubmitButton() {
       const form = getAddPhoneForm();
       if (!form) return null;
@@ -775,6 +822,11 @@
         throw new Error(`Failed to select "${countryLabel || 'target country'}" on the add-phone page.`);
       }
 
+      const smsChannelEnsured = await ensureSmsChannelSelected();
+      if (!smsChannelEnsured) {
+        throw new Error('Failed to select "Text Message" (SMS) channel on the add-phone page.');
+      }
+
       const dialCode = getDisplayedDialCode();
       if (!dialCode && !isExplicitInternational) {
         throw new Error(`Could not determine the dial code for "${countryLabel}" on the add-phone page.`);
@@ -1055,6 +1107,11 @@
       submitPhoneNumber,
       submitPhoneVerificationCode,
       toE164PhoneNumber,
+      getAddPhoneChannelInput,
+      getSelectedChannel,
+      getSmsChannelRadio,
+      getWhatsAppChannelRadio,
+      ensureSmsChannelSelected,
     };
   }
 

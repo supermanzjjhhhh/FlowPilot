@@ -646,6 +646,27 @@
       };
     }
 
+    async function skipRegistrationWaitStepAfter(currentStep, state = {}) {
+      const step6 = findStepByKeyAfter(currentStep, 'wait-registration-success', state)
+        || (getStepKeyForState(6, state) === 'wait-registration-success' ? 6 : null);
+      if (!step6) {
+        return false;
+      }
+      const step6Status = getNodeStatusByStep(step6, state);
+      if (isStepProtectedFromAutoSkip(step6Status)) {
+        return false;
+      }
+      await setNodeStatusByStep(step6, 'skipped', state);
+      const currentStepKey = getStepKeyForState(currentStep, state)
+        || (Number(currentStep) === 3 ? 'fill-password' : 'fetch-signup-code');
+      await addLog(
+        `步骤 ${currentStep}：账号已进入 ChatGPT 已登录态，已自动跳过步骤 ${step6}，流程将直接进入后续节点。`,
+        'warn',
+        { step: currentStep, stepKey: currentStepKey }
+      );
+      return true;
+    }
+
     function findStepByKeyAfter(currentOrder, targetKey, state = {}) {
       const activeStepIds = typeof getStepIdsForState === 'function'
         ? getStepIdsForState(state)
@@ -994,6 +1015,9 @@
               await addLog('步骤 3：页面已直接进入已登录态，已自动跳过步骤 5。', 'warn');
             }
           }
+          if (payload.skipRegistrationWaitStep) {
+            await skipRegistrationWaitStepAfter(step, await getState());
+          }
           if (payload.loginVerificationRequestedAt) {
             await setState({ loginVerificationRequestedAt: payload.loginVerificationRequestedAt });
           }
@@ -1020,6 +1044,9 @@
                 await addLog('步骤 4：检测到账号已直接进入已登录态，已自动跳过步骤 5。', 'warn');
               }
             }
+          }
+          if (payload.skipRegistrationWaitStep) {
+            await skipRegistrationWaitStepAfter(step, await getState());
           }
           break;
         case 7:

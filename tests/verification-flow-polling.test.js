@@ -2005,6 +2005,69 @@ test('verification flow keeps combined signup profile skip reason when completin
   ]);
 });
 
+test('verification flow forwards registration wait skip when completing signup verification', async () => {
+  const completed = [];
+
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeNodeFromBackground: async (nodeId, payload) => {
+      completed.push({ nodeId, payload });
+    },
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getNodeIdByStepForState: getTestNodeIdByStepForState,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    sendToContentScript: async () => {
+      throw new Error('should not use non-resilient channel');
+    },
+    sendToContentScriptResilient: async () => ({
+      success: true,
+      skipProfileStep: true,
+      skipRegistrationWaitStep: true,
+    }),
+    sendToMailContentScriptResilient: async () => ({
+      code: '654321',
+      emailTimestamp: 123,
+    }),
+    setState: async () => {},
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  await helpers.resolveVerificationStep(4, {}, { provider: 'custom', source: 'custom' });
+
+  assert.deepStrictEqual(completed, [
+    {
+      nodeId: 'fetch-signup-code',
+      payload: {
+        emailTimestamp: 123,
+        code: '654321',
+        phoneVerificationRequired: false,
+        skipProfileStep: true,
+        skipRegistrationWaitStep: true,
+      },
+    },
+  ]);
+});
+
 test('verification flow treats retryable submit transport failure as success when step 4 already redirected to logged-in home', async () => {
   const logs = [];
 
@@ -2016,6 +2079,9 @@ test('verification flow treats retryable submit transport failure as success whe
       tabs: {
         update: async () => {},
         get: async () => ({ url: 'https://chatgpt.com/' }),
+      },
+      scripting: {
+        executeScript: async () => [{ result: { loggedInHome: true, reason: 'no_logged_out_entry', url: 'https://chatgpt.com/' } }],
       },
     },
     CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
@@ -2052,9 +2118,118 @@ test('verification flow treats retryable submit transport failure as success whe
 
   assert.equal(result.success, true);
   assert.equal(result.skipProfileStep, true);
+  assert.equal(result.skipRegistrationWaitStep, true);
   assert.equal(result.assumed, true);
   assert.equal(result.transportRecovered, true);
   assert.equal(logs.some(({ message }) => /验证码提交后页面已切换到ChatGPT 已登录首页/.test(message)), true);
+});
+
+test('verification flow waits for logged-in home DOM signal before skipping registration wait', async () => {
+  let inspectCalls = 0;
+
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        update: async () => {},
+        get: async () => ({ url: 'https://chatgpt.com/' }),
+      },
+      scripting: {
+        executeScript: async () => {
+          inspectCalls += 1;
+          if (inspectCalls === 1) {
+            return [{ result: { loggedInHome: null, reason: 'loading_or_empty', url: 'https://chatgpt.com/' } }];
+          }
+          return [{ result: { loggedInHome: true, reason: 'no_logged_out_entry', url: 'https://chatgpt.com/' } }];
+        },
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isRetryableContentScriptTransportError: (error) => /message channel is closed/i.test(String(error?.message || error || '')),
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    sendToContentScript: async () => {
+      throw new Error('should not use non-resilient channel');
+    },
+    sendToContentScriptResilient: async () => {
+      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
+    },
+    sendToMailContentScriptResilient: async () => ({}),
+    setState: async () => {},
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  const result = await helpers.submitVerificationCode(4, '654321');
+
+  assert.equal(inspectCalls, 2);
+  assert.equal(result.success, true);
+  assert.equal(result.skipProfileStep, true);
+  assert.equal(result.skipRegistrationWaitStep, true);
+});
+
+test('verification flow does not skip registration wait when fallback sees logged-out chatgpt home', async () => {
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        update: async () => {},
+        get: async () => ({ url: 'https://chatgpt.com/' }),
+      },
+      scripting: {
+        executeScript: async () => [{ result: { loggedInHome: false, reason: 'logged_out_entry', url: 'https://chatgpt.com/' } }],
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeNodeFromBackground: async () => {},
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isRetryableContentScriptTransportError: (error) => /message channel is closed/i.test(String(error?.message || error || '')),
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    sendToContentScript: async () => {
+      throw new Error('should not use non-resilient channel');
+    },
+    sendToContentScriptResilient: async () => {
+      throw new Error('The page keeping the extension port is moved into back/forward cache, so the message channel is closed.');
+    },
+    sendToMailContentScriptResilient: async () => ({}),
+    setState: async () => {},
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  const result = await helpers.submitVerificationCode(4, '654321');
+
+  assert.equal(result.success, true);
+  assert.equal(result.skipProfileStep, true);
+  assert.equal(result.skipRegistrationWaitStep, false);
+  assert.equal(result.assumed, true);
 });
 
 test('verification flow avoids resend storms when iCloud polling keeps hitting transport errors', async () => {

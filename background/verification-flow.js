@@ -78,11 +78,17 @@
         : '';
     }
 
-    const isRetryableVerificationTransportError = typeof deps.isRetryableContentScriptTransportError === 'function'
+    const baseRetryableVerificationTransportError = typeof deps.isRetryableContentScriptTransportError === 'function'
       ? deps.isRetryableContentScriptTransportError
       : ((error) => /back\/forward cache|message channel is closed|Receiving end does not exist|port closed before a response was received|A listener indicated an asynchronous response|内容脚本\s+\d+(?:\.\d+)?\s*秒内未响应|did not respond in \d+s/i.test(
         String(typeof error === 'string' ? error : error?.message || '')
       ));
+
+    function isRetryableVerificationTransportError(error) {
+      const message = String(typeof error === 'string' ? error : error?.message || '');
+      return Boolean(baseRetryableVerificationTransportError(error))
+        || /页面刚完成跳转或刷新，内容脚本还没有重新接回/i.test(message);
+    }
 
     function getVerificationCodeStateKey(step) {
       return step === 4 ? 'lastSignupCode' : 'lastLoginCode';
@@ -179,11 +185,87 @@
       }
     }
 
+    async function inspectChatgptHomeLoggedInSignal(tabId) {
+      if (!chrome?.scripting?.executeScript || !Number.isInteger(Number(tabId))) {
+        return null;
+      }
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: Number(tabId) },
+          func: () => {
+            const url = String(location.href || '');
+            const parsed = new URL(url);
+            const host = String(parsed.hostname || '').toLowerCase();
+            if (!['chatgpt.com', 'www.chatgpt.com', 'chat.openai.com'].includes(host)) {
+              return { loggedInHome: false, reason: 'host', url };
+            }
+            const path = String(parsed.pathname || '');
+            if (/^\/(?:auth\/|create-account\/|email-verification|log-in|add-phone)(?:[/?#]|$)/i.test(path)) {
+              return { loggedInHome: false, reason: 'auth_path', url };
+            }
+
+            const isVisible = (el) => {
+              if (!el) return false;
+              const style = window.getComputedStyle(el);
+              if (!style || style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                return false;
+              }
+              const rect = el.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0;
+            };
+            const isEnabled = (el) => Boolean(el)
+              && !el.disabled
+              && String(el.getAttribute?.('aria-disabled') || '').toLowerCase() !== 'true';
+            const getActionText = (el) => [
+              el?.textContent,
+              el?.value,
+              el?.getAttribute?.('aria-label'),
+              el?.getAttribute?.('title'),
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+
+            const entryPattern = /免费注册|立即注册|注册|登录|ログイン|サインイン|無料でサインアップ|サインアップ|新規登録|登録する|登録|アカウントを作成|アカウント作成|log\s*in|sign\s*in|sign\s*up|register|create\s*account|create\s+account/i;
+            const actions = Array.from(document.querySelectorAll(
+              'a, button, [role="button"], [role="link"], input[type="button"], input[type="submit"]'
+            ));
+            const hasLoggedOutEntryAction = actions.some((el) => (
+              isVisible(el)
+              && isEnabled(el)
+              && entryPattern.test(getActionText(el))
+            ));
+            if (hasLoggedOutEntryAction) {
+              return { loggedInHome: false, reason: 'logged_out_entry', url };
+            }
+
+            const pageText = String(document.body?.innerText || document.body?.textContent || '').replace(/\s+/g, ' ').trim();
+            if (document.readyState === 'loading' || !pageText) {
+              return { loggedInHome: null, reason: 'loading_or_empty', url };
+            }
+            return { loggedInHome: true, reason: 'no_logged_out_entry', url };
+          },
+        });
+        const value = results?.[0]?.result;
+        if (value?.loggedInHome === true) {
+          return true;
+        }
+        if (value?.loggedInHome === false) {
+          return false;
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    }
+
     async function detectStep4PostSubmitFallback(tabId, options = {}) {
       const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 8000);
       const pollIntervalMs = Math.max(100, Number(options.pollIntervalMs) || 250);
       const startedAt = Date.now();
       let lastUrl = '';
+      let pendingChatgptHomeUrl = '';
 
       while (Date.now() - startedAt < timeoutMs) {
         throwIfStopped();
@@ -195,10 +277,17 @@
           }
 
           if (isLikelyLoggedInChatgptHomeUrl(currentUrl)) {
+            const loggedInSignal = await inspectChatgptHomeLoggedInSignal(tabId);
+            if (loggedInSignal === null) {
+              pendingChatgptHomeUrl = currentUrl;
+              await sleepWithStop(pollIntervalMs);
+              continue;
+            }
             return {
               success: true,
               reason: 'chatgpt_home',
               skipProfileStep: true,
+              skipRegistrationWaitStep: loggedInSignal === true,
               url: currentUrl,
             };
           }
@@ -216,6 +305,16 @@
         }
 
         await sleepWithStop(pollIntervalMs);
+      }
+
+      if (pendingChatgptHomeUrl) {
+        return {
+          success: true,
+          reason: 'chatgpt_home',
+          skipProfileStep: true,
+          skipRegistrationWaitStep: false,
+          url: pendingChatgptHomeUrl,
+        };
       }
 
       return {
@@ -1176,6 +1275,7 @@
                 assumed: true,
                 transportRecovered: true,
                 skipProfileStep: Boolean(fallback.skipProfileStep),
+                skipRegistrationWaitStep: Boolean(fallback.skipRegistrationWaitStep),
                 url: fallback.url,
               };
             }
@@ -1439,6 +1539,7 @@
             code: result.code,
             phoneVerificationRequired: Boolean(submitResult.addPhonePage),
             ...(step === 4 && submitResult?.skipProfileStep ? { skipProfileStep: true } : {}),
+            ...(step === 4 && submitResult?.skipRegistrationWaitStep ? { skipRegistrationWaitStep: true } : {}),
             ...(step === 4 && submitResult?.skipProfileStepReason
               ? { skipProfileStepReason: submitResult.skipProfileStepReason }
               : {}),
