@@ -155,3 +155,38 @@ return { pollCustomMailVerificationCode };
     /手动确认模式/
   );
 });
+
+test("verification flow routes Temp Mail API provider to background poller", async () => {
+  const source = fs.readFileSync("background/verification-flow.js", "utf8");
+  const globalScope = {};
+  const api = new Function("self", source + "; return self.MultiPageBackgroundVerificationFlow;")(globalScope);
+  const pollCalls = [];
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    buildVerificationPollPayload: () => ({ maxAttempts: 1, intervalMs: 1 }),
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    isStopError: () => false,
+    pollTempMailVerificationCode: async (step, state, payload) => {
+      pollCalls.push({ step, state, payload });
+      return { ok: true, code: "789012", emailTimestamp: 3, mailId: "temp-msg-1" };
+    },
+    sendToContentScript: async () => ({}),
+    setState: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    TEMP_MAIL_API_PROVIDER: "temp-mail-api",
+  });
+
+  const result = await helpers.pollFreshVerificationCode(
+    4,
+    { mailProvider: "temp-mail-api" },
+    { provider: "temp-mail-api", label: "Temp 邮箱" },
+    { disableTimeBudgetCap: true }
+  );
+
+  assert.equal(result.code, "789012");
+  assert.equal(pollCalls.length, 1);
+  assert.equal(pollCalls[0].step, 4);
+  assert.equal(pollCalls[0].payload.maxAttempts, 1);
+});

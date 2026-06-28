@@ -1,4 +1,5 @@
-// background.js — Service Worker: orchestration, state, tab management, message routing
+﻿// background.js — Service Worker: orchestration, state, tab management, message routing
+
 
 importScripts(
   'flows/openai/index.js',
@@ -94,6 +95,8 @@ importScripts(
   'background/cloudmail-provider.js',
   'yyds-mail-utils.js',
   'background/yyds-mail-provider.js',
+  'temp-mail-api-utils.js',
+  'background/temp-mail-provider.js',
   'icloud-utils.js',
   'mail-provider-utils.js',
   'content/activation-utils.js'
@@ -541,6 +544,7 @@ const ICLOUD_PROVIDER = 'icloud';
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const HOTMAIL_PROVIDER = 'hotmail-api';
+const TEMP_MAIL_API_PROVIDER = 'temp-mail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const CLOUDFLARE_TEMP_EMAIL_GENERATOR = 'cloudflare-temp-email';
@@ -2799,6 +2803,7 @@ function normalizeMailProvider(value = '') {
     case 'custom':
     case ICLOUD_PROVIDER:
     case GMAIL_PROVIDER:
+    case TEMP_MAIL_API_PROVIDER:
     case HOTMAIL_PROVIDER:
     case LUCKMAIL_PROVIDER:
     case CLOUDFLARE_TEMP_EMAIL_PROVIDER:
@@ -3122,6 +3127,18 @@ const {
   fetchYydsMailAddress,
   pollYydsMailVerificationCode,
 } = yydsMailProvider;
+
+const tempMailProvider = self.MultiPageBackgroundTempMailProvider.createTempMailProvider({
+  addLog,
+  getState,
+  setState,
+  persistRegistrationEmailState,
+  setEmailState,
+  sleepWithStop,
+  throwIfStopped,
+  TEMP_MAIL_API_PROVIDER,
+});
+const { ensureTempMailAddress, pollTempMailVerificationCode } = tempMailProvider;
 
 function normalizeSub2ApiGroupNames(value = '') {
   const source = Array.isArray(value)
@@ -12283,6 +12300,9 @@ async function fetchGeneratedEmail(state, options = {}) {
     ? YYDS_MAIL_GENERATOR
     : 'yyds-mail';
   const requestedMailProvider = normalizeMailProvider(options.mailProvider ?? currentState.mailProvider);
+  if (requestedMailProvider === TEMP_MAIL_API_PROVIDER) {
+    return ensureTempMailAddress(options);
+  }
   if (requestedMailProvider === yydsMailProvider) {
     return fetchYydsMailAddress(currentState, options);
   }
@@ -13915,6 +13935,8 @@ const flowMailPollingService = self.MultiPageBackgroundFlowMailPolling?.createFl
   LUCKMAIL_PROVIDER,
   pollCloudflareTempEmailVerificationCode,
   pollCloudMailVerificationCode,
+  pollTempMailVerificationCode,
+  TEMP_MAIL_API_PROVIDER,
   pollCustomMailVerificationCode,
   pollHotmailVerificationCode,
   pollLuckmailVerificationCode,
@@ -13954,6 +13976,8 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
   pollCloudflareTempEmailVerificationCode,
   pollCloudMailVerificationCode,
+  pollTempMailVerificationCode,
+  TEMP_MAIL_API_PROVIDER,
   pollCustomMailVerificationCode,
   pollHotmailVerificationCode,
   pollLuckmailVerificationCode,
@@ -14087,6 +14111,7 @@ const step4Executor = self.MultiPageBackgroundStep4?.createStep4Executor({
   LUCKMAIL_PROVIDER,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
   CLOUD_MAIL_PROVIDER,
+  TEMP_MAIL_API_PROVIDER,
   resolveVerificationStep: verificationFlowHelpers.resolveVerificationStep,
   reuseOrCreateTab,
   sendToContentScript,
@@ -14154,6 +14179,7 @@ const step8Executor = self.MultiPageBackgroundStep8?.createStep8Executor({
   isTabAlive,
   isVerificationMailPollingError,
   LUCKMAIL_PROVIDER,
+  TEMP_MAIL_API_PROVIDER,
   resolveVerificationStep: verificationFlowHelpers.resolveVerificationStep,
   resolveSignupEmailForFlow,
   persistRegistrationEmailState,
@@ -14834,6 +14860,9 @@ function getMailConfig(state) {
   }
   if (provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER) {
     return { provider: CLOUDFLARE_TEMP_EMAIL_PROVIDER, label: 'Cloudflare Temp Email' };
+  }
+  if (provider === TEMP_MAIL_API_PROVIDER) {
+    return { provider: TEMP_MAIL_API_PROVIDER, label: 'Temp 邮箱' };
   }
   if (provider === 'cloudmail') {
     return { provider: 'cloudmail', label: 'Cloud Mail' };

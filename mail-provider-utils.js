@@ -10,6 +10,7 @@
   }
 })(typeof self !== 'undefined' ? self : globalThis, function createMailProviderUtils() {
   const HOTMAIL_PROVIDER = 'hotmail-api';
+  const TEMP_MAIL_API_PROVIDER = 'temp-mail-api';
   const GMAIL_PROVIDER = 'gmail';
   const YYDS_MAIL_PROVIDER = 'yyds-mail';
   const NETEASE_LIST_PATH = '/js6/main.jsp?df=mail163_letter#module=mbox.ListModule%7C%7B%22fid%22%3A1%2C%22order%22%3A%22date%22%2C%22desc%22%3Atrue%7D';
@@ -27,12 +28,15 @@
     const normalized = String(value || '').trim().toLowerCase();
     switch (normalized) {
       case HOTMAIL_PROVIDER:
+      case TEMP_MAIL_API_PROVIDER:
       case YYDS_MAIL_PROVIDER:
       case '163':
       case '163-vip':
       case '126':
       case 'qq':
       case 'inbucket':
+      case 'cloudflare-temp-email':
+      case 'cloudmail':
         return normalized;
       default:
         return '163';
@@ -81,6 +85,9 @@
     if (provider === YYDS_MAIL_PROVIDER) {
       return { provider: YYDS_MAIL_PROVIDER, label: 'YYDS Mail' };
     }
+    if (provider === TEMP_MAIL_API_PROVIDER) {
+      return { provider: TEMP_MAIL_API_PROVIDER, label: 'Temp 邮箱' };
+    }
     if (provider === '163') {
       return {
         source: 'mail-163',
@@ -125,6 +132,7 @@
 
   return {
     GMAIL_PROVIDER,
+    TEMP_MAIL_API_PROVIDER,
     HOTMAIL_PROVIDER,
     YYDS_MAIL_PROVIDER,
     getIcloudForwardMailConfig,

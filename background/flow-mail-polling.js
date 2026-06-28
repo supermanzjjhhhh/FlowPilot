@@ -85,6 +85,8 @@
       pollCustomMailVerificationCode = null,
       pollHotmailVerificationCode = null,
       pollLuckmailVerificationCode = null,
+      pollTempMailVerificationCode = null,
+      TEMP_MAIL_API_PROVIDER = 'temp-mail-api',
       pollYydsMailVerificationCode = null,
       reuseOrCreateTab = async () => null,
       sendToMailContentScriptResilient = null,
@@ -117,6 +119,10 @@
       [normalizeProviderId(YYDS_MAIL_PROVIDER), {
         label: 'YYDS Mail',
         poll: pollYydsMailVerificationCode,
+      }],
+      [normalizeProviderId(TEMP_MAIL_API_PROVIDER), {
+        label: 'Temp 邮箱',
+        poll: pollTempMailVerificationCode,
       }],
     ]);
 

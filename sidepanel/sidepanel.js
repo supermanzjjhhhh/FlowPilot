@@ -2016,6 +2016,11 @@ const MAIL_PROVIDER_LOGIN_CONFIGS = {
     url: 'https://github.com/QLHazyCoder/cloudflare_temp_email',
     buttonLabel: '部署',
   },
+  'temp-mail-api': {
+    label: 'temp 邮箱',
+    url: 'https://temp-mail.org/en/',
+    buttonLabel: '打开',
+  },
   [YYDS_MAIL_PROVIDER]: {
     label: 'YYDS Mail',
     url: 'https://vip.215.im/docs',
@@ -12229,7 +12234,7 @@ function applySettingsState(state) {
     ? YYDS_MAIL_PROVIDER
     : 'yyds-mail';
   const restoredMailProvider = isCustomMailProvider(state?.mailProvider)
-    || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', yydsMailProvider, '163', '163-vip', '126', 'qq', 'inbucket', '2925', 'cloudflare-temp-email', 'cloudmail'].includes(String(state?.mailProvider || '').trim())
+    || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', yydsMailProvider, '163', '163-vip', '126', 'qq', 'inbucket', '2925', 'cloudflare-temp-email', 'cloudmail', 'temp-mail-api'].includes(String(state?.mailProvider || '').trim())
     ? String(state?.mailProvider || '163').trim()
     : (String(state?.emailGenerator || '').trim().toLowerCase() === 'custom'
       || String(state?.emailGenerator || '').trim().toLowerCase() === 'manual'
@@ -13832,6 +13837,7 @@ function updateMailProviderUI() {
   const useGeneratedAlias = usesGeneratedAliasMailProvider(selectMailProvider.value, mail2925Mode, selectedGenerator);
   const useInbucket = selectMailProvider.value === 'inbucket';
   const useHotmail = selectMailProvider.value === 'hotmail-api';
+  const useTempMailApi = selectMailProvider.value === 'temp-mail-api';
   const useLuckmail = canShowLuckmail && isLuckmailProvider();
   const useYydsMail = typeof isYydsMailProvider === 'function'
     ? isYydsMailProvider()
@@ -13839,7 +13845,7 @@ function updateMailProviderUI() {
   const useCustomEmail = isCustomMailProvider();
   const useCustomMailProviderPool = useCustomEmail && usesCustomMailProviderPool(selectMailProvider.value);
   const useIcloudProvider = isIcloudMailProvider();
-  const useEmailGenerator = !useHotmail && !useLuckmail && !useYydsMail && !useCustomEmail && (!useGeneratedAlias || useGmail);
+  const useEmailGenerator = !useTempMailApi && !useHotmail && !useLuckmail && !useYydsMail && !useCustomEmail && (!useGeneratedAlias || useGmail);
   const useCloudflareTempEmailProvider = selectMailProvider.value === 'cloudflare-temp-email';
   const useCloudMailProvider = selectMailProvider.value === 'cloudmail';
   const aliasUiCopy = useGeneratedAlias
@@ -14030,7 +14036,7 @@ function updateMailProviderUI() {
   }
   inputEmailPrefix.style.display = '';
   inputEmailPrefix.readOnly = false;
-  selectEmailGenerator.disabled = useHotmail || useLuckmail || useYydsMail || useCustomEmail || (useGeneratedAlias && !useGmail);
+  selectEmailGenerator.disabled = useTempMailApi || useHotmail || useLuckmail || useYydsMail || useCustomEmail || (useGeneratedAlias && !useGmail);
   if (useGmail) {
     labelEmailPrefix.textContent = 'Gmail 原邮箱';
     inputEmailPrefix.placeholder = '例如 yourname@gmail.com';

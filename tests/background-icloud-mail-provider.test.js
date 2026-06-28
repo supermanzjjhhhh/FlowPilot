@@ -64,6 +64,8 @@ const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+const TEMP_MAIL_API_PROVIDER = 'temp-mail-api';
+const CLOUD_MAIL_PROVIDER = 'cloudmail';
 const getSharedIcloudForwardMailConfig = shared.getIcloudForwardMailConfig;
 const normalizeIcloudTargetMailboxType = shared.normalizeIcloudTargetMailboxType;
 const normalizeIcloudForwardMailProvider = shared.normalizeIcloudForwardMailProvider;
@@ -99,6 +101,8 @@ const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+const TEMP_MAIL_API_PROVIDER = 'temp-mail-api';
+const CLOUD_MAIL_PROVIDER = 'cloudmail';
 const PERSISTED_SETTING_DEFAULTS = { mailProvider: '163' };
 ${bundle}
 return { normalizeMailProvider };
@@ -137,6 +141,16 @@ test('getMailConfig reuses preferred icloud host when preference is auto', () =>
   });
 });
 
+test('getMailConfig returns temp-mail-api provider metadata', () => {
+  const api = createGetMailConfigApi();
+
+  assert.deepEqual(api.getMailConfig({
+    mailProvider: 'temp-mail-api',
+  }), {
+    provider: 'temp-mail-api',
+    label: 'Temp 邮箱',
+  });
+});
 test('getMailConfig keeps provider metadata for 2925 mailboxes', () => {
   const api = createGetMailConfigApi();
 

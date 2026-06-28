@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   HOTMAIL_PROVIDER,
+  TEMP_MAIL_API_PROVIDER,
   YYDS_MAIL_PROVIDER,
   getIcloudForwardMailConfig,
   getIcloudForwardMailProviderOptions,
@@ -16,6 +17,7 @@ test('normalizeMailProvider accepts 126 and falls back to 163', () => {
   assert.equal(normalizeMailProvider('126'), '126');
   assert.equal(normalizeMailProvider('163-vip'), '163-vip');
   assert.equal(normalizeMailProvider(YYDS_MAIL_PROVIDER), YYDS_MAIL_PROVIDER);
+  assert.equal(normalizeMailProvider(TEMP_MAIL_API_PROVIDER), TEMP_MAIL_API_PROVIDER);
   assert.equal(normalizeMailProvider('unknown-provider'), '163');
 });
 
@@ -40,6 +42,15 @@ test('getMailProviderConfig preserves the hotmail provider sentinel', () => {
   );
 });
 
+test('getMailProviderConfig preserves the temp-mail-api provider sentinel', () => {
+  assert.deepEqual(
+    getMailProviderConfig({ mailProvider: TEMP_MAIL_API_PROVIDER }),
+    {
+      provider: TEMP_MAIL_API_PROVIDER,
+      label: 'Temp 邮箱',
+    }
+  );
+});
 test('getMailProviderConfig preserves the YYDS Mail provider sentinel', () => {
   assert.deepEqual(
     getMailProviderConfig({ mailProvider: YYDS_MAIL_PROVIDER }),

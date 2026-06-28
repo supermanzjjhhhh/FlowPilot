@@ -16,3 +16,26 @@ __pycache__/
 .worktrees/
 # Local exported runtime settings
 /config.json
+
+# CodeGraph index
+.codegraph/
+
+# Logs and temporary files
+filtered_logs.txt
+
+# Temporary test scripts (not project code)
+cdp_runner.js
+clean_test.js
+e2e-background-load-check.js
+extract_api.js
+patch-mail-provider.js
+test-auto-temp-mail-e2e.js
+verify-temp-mail-live.js
+background-service-worker-load-check.js
+
+# Temporary test directories
+tests/temp_cdp_reverse/
+tests/temp_ext/
+tests/temp_puppeteer_core/
+tests/temp_verify_ext/
+tests/temp_verify_refresh_ext/

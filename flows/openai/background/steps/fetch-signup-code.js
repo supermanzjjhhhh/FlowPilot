@@ -20,6 +20,7 @@
       LUCKMAIL_PROVIDER,
       CLOUDFLARE_TEMP_EMAIL_PROVIDER,
       CLOUD_MAIL_PROVIDER = 'cloudmail',
+      TEMP_MAIL_API_PROVIDER,
       resolveVerificationStep,
       reuseOrCreateTab,
       sendToContentScript,
@@ -121,6 +122,7 @@
         || mail.provider === LUCKMAIL_PROVIDER
         || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER
         || mail.provider === CLOUD_MAIL_PROVIDER
+        || mail.provider === TEMP_MAIL_API_PROVIDER
         || shouldUseCustomMailHelper(state)
       ) {
         await addLog(`步骤 4：正在通过 ${mail.label} 轮询验证码...`);
@@ -148,6 +150,7 @@
         LUCKMAIL_PROVIDER,
         CLOUDFLARE_TEMP_EMAIL_PROVIDER,
         CLOUD_MAIL_PROVIDER,
+        TEMP_MAIL_API_PROVIDER,
       ].includes(mail.provider) && !shouldUseCustomMailHelper(state);
       const signupProfile = buildSignupProfileForVerificationStep();
 

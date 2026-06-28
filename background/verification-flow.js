@@ -26,6 +26,7 @@
       isStopError,
       LUCKMAIL_PROVIDER,
       YYDS_MAIL_PROVIDER = 'yyds-mail',
+      TEMP_MAIL_API_PROVIDER = 'temp-mail-api',
       MAIL_2925_VERIFICATION_INTERVAL_MS,
       MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
       pollCloudflareTempEmailVerificationCode,
@@ -34,6 +35,7 @@
       pollHotmailVerificationCode,
       pollLuckmailVerificationCode,
       pollYydsMailVerificationCode,
+      pollTempMailVerificationCode,
       sendToContentScript,
       sendToContentScriptResilient,
       sendToMailContentScriptResilient,
@@ -1101,6 +1103,14 @@
           ...cleanPollOverrides,
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollYydsMailVerificationCode(step, state, timedPoll.payload);
+      }
+
+      if (mail.provider === TEMP_MAIL_API_PROVIDER) {
+        const timedPoll = await applyMailPollingTimeBudget(step, {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+        }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
+        return pollTempMailVerificationCode(step, state, timedPoll.payload);
       }
 
       if (Number(pollOverrides.resendIntervalMs) > 0) {
