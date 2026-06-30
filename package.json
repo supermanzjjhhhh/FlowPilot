@@ -4,5 +4,8 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.2.1"
   }
 }

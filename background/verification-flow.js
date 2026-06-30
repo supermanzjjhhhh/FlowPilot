@@ -532,6 +532,7 @@
       }
       const normalizedStep = Number(step) === 4 ? 4 : 8;
       const is2925Provider = state?.mailProvider === '2925';
+      const isTempMailApi = state?.mailProvider === TEMP_MAIL_API_PROVIDER;
       const mail2925MatchTargetEmail = is2925Provider
         && String(state?.mail2925Mode || '').trim().toLowerCase() === 'receive';
       return {
@@ -547,8 +548,12 @@
           : (String(state?.step8VerificationTargetEmail || '').trim() || state.email),
         targetEmailHints: [],
         mail2925MatchTargetEmail,
-        maxAttempts: is2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5,
-        intervalMs: is2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000,
+        maxAttempts: is2925Provider
+          ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS
+          : (isTempMailApi ? 20 : 5),
+        intervalMs: is2925Provider
+          ? MAIL_2925_VERIFICATION_INTERVAL_MS
+          : (isTempMailApi ? 5000 : 3000),
         ...overrides,
       };
     }

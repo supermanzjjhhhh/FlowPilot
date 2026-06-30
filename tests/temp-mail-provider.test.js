@@ -107,3 +107,63 @@ test('pollTempMailVerificationCode passes pollPayload to waitForVerificationCode
     globalThis.TempMailApiUtils.createSession = originalCreateSession;
   }
 });
+
+test('OpenAi mail rules configures temp-mail-api provider maxAttempts and intervalMs correctly', () => {
+  const fs = require('fs');
+  const source = fs.readFileSync('flows/openai/mail-rules.js', 'utf8');
+  const globalScope = {};
+  new Function('self', `${source};`)(globalScope);
+  const rulesFactory = globalScope.MultiPageOpenAiMailRules.createOpenAiMailRules({
+    getHotmailVerificationRequestTimestamp: () => 0,
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+  });
+
+  // mailProvider ? temp-mail-api ?
+  const state = { mailProvider: 'temp-mail-api', email: 'test@temp-mail.org' };
+  const payload = rulesFactory.getRuleDefinition(4, state);
+
+  assert.equal(payload.maxAttempts, 20);
+  assert.equal(payload.intervalMs, 5000);
+
+  // ?? mailProvider ? (?? default)
+  const defaultState = { mailProvider: 'default-mail', email: 'test@temp-mail.org' };
+  const defaultPayload = rulesFactory.getRuleDefinition(4, defaultState);
+
+  assert.equal(defaultPayload.maxAttempts, 5);
+  assert.equal(defaultPayload.intervalMs, 3000);
+});
+
+test('Verification flow helper getVerificationPollPayload configures temp-mail-api provider maxAttempts and intervalMs correctly', () => {
+  const fs = require('fs');
+  const source = fs.readFileSync('background/verification-flow.js', 'utf8');
+  const globalScope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundVerificationFlow;`)(globalScope);
+
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async () => {},
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    isStopError: () => false,
+    sendToContentScript: async () => ({}),
+    setState: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    TEMP_MAIL_API_PROVIDER: 'temp-mail-api',
+    getHotmailVerificationRequestTimestamp: () => 0,
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+  });
+
+  const state = { mailProvider: 'temp-mail-api', email: 'test@temp-mail.org' };
+  const payload = helpers.getVerificationPollPayload(4, state);
+
+  assert.equal(payload.maxAttempts, 20);
+  assert.equal(payload.intervalMs, 5000);
+
+  const defaultState = { mailProvider: 'default-mail', email: 'test@temp-mail.org' };
+  const defaultPayload = helpers.getVerificationPollPayload(4, defaultState);
+
+  assert.equal(defaultPayload.maxAttempts, 5);
+  assert.equal(defaultPayload.intervalMs, 3000);
+});

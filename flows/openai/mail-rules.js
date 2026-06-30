@@ -53,6 +53,10 @@
       return String(state?.mailProvider || '').trim().toLowerCase() === '2925';
     }
 
+    function isTempMailApiProvider(state = {}) {
+      return String(state?.mailProvider || '').trim().toLowerCase() === 'temp-mail-api';
+    }
+
     function shouldMatchMail2925TargetEmail(state = {}) {
       return isMail2925Provider(state)
         && String(state?.mail2925Mode || '').trim().toLowerCase() === 'receive';
@@ -78,6 +82,7 @@
       const nodeId = resolveVerificationNodeId(input);
       const normalizedStep = getVisibleStepForNode(nodeId, state);
       const mail2925Provider = isMail2925Provider(state);
+      const tempMailApiProvider = isTempMailApiProvider(state);
       const signupStep = nodeId === SIGNUP_CODE_NODE_ID;
       const targetEmail = signupStep
         ? state?.email
@@ -105,8 +110,12 @@
         targetEmail,
         targetEmailHints: buildTargetEmailHints(targetEmail),
         mail2925MatchTargetEmail: shouldMatchMail2925TargetEmail(state),
-        maxAttempts: mail2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5,
-        intervalMs: mail2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000,
+        maxAttempts: mail2925Provider
+          ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS
+          : (tempMailApiProvider ? 20 : 5),
+        intervalMs: mail2925Provider
+          ? MAIL_2925_VERIFICATION_INTERVAL_MS
+          : (tempMailApiProvider ? 5000 : 3000),
       };
     }
 

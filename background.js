@@ -10919,6 +10919,16 @@ let stopRequested = false;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log(LOG_PREFIX, `Received: ${message.type} from ${message.source || 'sidepanel'}`, message);
 
+  // 处理获取 temp-mail token 的请求（用于调试/手动获取验证码）
+  if (message.type === 'GET_TEMP_MAIL_TOKEN') {
+    chrome.storage.local.get(['tempMailApiToken', 'tempMailApiEmail']).then(data => {
+      sendResponse(data);
+    }).catch(err => {
+      sendResponse({ error: err.message });
+    });
+    return true;
+  }
+
   handleMessage(message, sender).then(response => {
     sendResponse(response);
   }).catch(err => {
